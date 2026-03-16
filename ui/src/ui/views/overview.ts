@@ -117,7 +117,7 @@ export function renderOverview(props: OverviewProps) {
         <div class="muted" style="margin-top: 8px">
           ${t("overview.auth.required")}
           <div style="margin-top: 6px">
-            <span class="mono">openclaw dashboard --no-open</span> → tokenized URL<br />
+            <span class="mono">pansclaw dashboard --no-open</span> → tokenized URL<br />
             <span class="mono">openclaw doctor --generate-gateway-token</span> → set token
           </div>
           <div style="margin-top: 6px">
@@ -135,7 +135,7 @@ export function renderOverview(props: OverviewProps) {
     }
     return html`
       <div class="muted" style="margin-top: 8px">
-        ${t("overview.auth.failed", { command: "openclaw dashboard --no-open" })}
+        ${t("overview.auth.failed", { command: "pansclaw dashboard --no-open" })}
         <div style="margin-top: 6px">
           <a
             class="session-link"
@@ -313,8 +313,8 @@ export function renderOverview(props: OverviewProps) {
                 <div class="login-gate__help" style="margin-top: 16px;">
                   <div class="login-gate__help-title">${t("overview.connection.title")}</div>
                   <ol class="login-gate__steps">
-                    <li>${t("overview.connection.step1")}<code>openclaw gateway run</code></li>
-                    <li>${t("overview.connection.step2")}<code>openclaw dashboard --no-open</code></li>
+                    <li>${t("overview.connection.step1")}<code>pansclaw gateway run</code></li>
+                    <li>${t("overview.connection.step2")}<code>pansclaw dashboard --no-open</code></li>
                     <li>${t("overview.connection.step3")}</li>
                     <li>${t("overview.connection.step4")}<code>openclaw doctor --generate-gateway-token</code></li>
                   </ol>

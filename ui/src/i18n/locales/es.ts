@@ -102,7 +102,7 @@ export const es: TranslationMap = {
     pairing: {
       hint: "Este dispositivo necesita aprobación de emparejamiento del host de la puerta de enlace.",
       mobileHint:
-        "¿En el móvil? Copia la URL completa (incluyendo #token=...) desde openclaw dashboard --no-open en tu escritorio.",
+        "¿En el móvil? Copia la URL completa (incluyendo #token=...) desde pansclaw dashboard --no-open en tu escritorio.",
     },
     insecure: {
       hint: "Esta página es HTTP, por lo que el navegador bloquea el acceso a la identidad del dispositivo. Usa HTTPS (Tailscale Serve) o abre {url} en el equipo host.",
