@@ -220,7 +220,7 @@ export function resolveAgentAvatarUrl(
 
 export function agentLogoUrl(basePath: string): string {
   const base = basePath?.trim() ? basePath.replace(/\/$/, "") : "";
-  return base ? `${base}/favicon.svg` : "favicon.svg";
+  return base ? `${base}/favicon-32.png` : "favicon-32.png";
 }
 
 function isLikelyEmoji(value: string) {
