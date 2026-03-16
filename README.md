@@ -1,7 +1,7 @@
 # PansClaw
 
 <p align="center">
-  <img src="image/1.png" alt="PansClaw" width="180">
+  <img src="image/1.png" alt="PansClaw" width="80">
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="image/4.png" alt="Pan'sPower" width="200">
+  <img src="image/4.png" alt="Pan'sPower" width="100">
 </p>
 
 ## 特性
