@@ -1,5 +1,7 @@
 # PansClaw
 
+> 当前版本：v0.2.1
+
 <p align="center">
   <img src="image/1.png" alt="PansClaw" width="80">
 </p>
