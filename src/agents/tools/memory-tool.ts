@@ -3,6 +3,11 @@ import type { OpenClawConfig } from "../../config/config.js";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
 import { resolveMemoryBackendConfig } from "../../memory/backend-config.js";
 import { getMemorySearchManager } from "../../memory/index.js";
+import {
+  buildMemoryKnowledgeGraph,
+  queryCausality,
+  queryTimeline,
+} from "../../memory/knowledge-graph.js";
 import type { MemorySearchResult } from "../../memory/types.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
@@ -20,6 +25,19 @@ const MemoryGetSchema = Type.Object({
   path: Type.String(),
   from: Type.Optional(Type.Number()),
   lines: Type.Optional(Type.Number()),
+});
+
+const MemoryTimelineSchema = Type.Object({
+  subject: Type.Optional(Type.String()),
+  entityType: Type.Optional(Type.String()),
+  from: Type.Optional(Type.String()),
+  to: Type.Optional(Type.String()),
+  limit: Type.Optional(Type.Number()),
+});
+
+const MemoryCausalQuerySchema = Type.Object({
+  effect: Type.String(),
+  limit: Type.Optional(Type.Number()),
 });
 
 function resolveMemoryToolContext(options: { config?: OpenClawConfig; agentSessionKey?: string }) {
@@ -163,6 +181,137 @@ export function createMemoryGetTool(options: {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return jsonResult({ path: relPath, text: "", disabled: true, error: message });
+        }
+      },
+  });
+}
+
+export function createMemoryTimelineTool(options: {
+  config?: OpenClawConfig;
+  agentSessionKey?: string;
+}): AnyAgentTool | null {
+  return createMemoryTool({
+    options,
+    label: "Memory Timeline",
+    name: "memory_timeline",
+    description:
+      "Build a long-term memory timeline over people/projects/preferences from MEMORY.md + memory/*.md and return chronologically traceable events.",
+    parameters: MemoryTimelineSchema,
+    execute:
+      ({ cfg, agentId }) =>
+      async (_toolCallId, params) => {
+        const subject = readStringParam(params, "subject");
+        const entityType = readStringParam(params, "entityType");
+        const from = readStringParam(params, "from");
+        const to = readStringParam(params, "to");
+        const limit = readNumberParam(params, "limit", { integer: true });
+
+        const memory = await getMemoryManagerContext({ cfg, agentId });
+        if ("error" in memory) {
+          return jsonResult({ events: [], disabled: true, error: memory.error });
+        }
+
+        const workspaceDir = memory.manager.status().workspaceDir;
+        if (!workspaceDir) {
+          return jsonResult({
+            events: [],
+            disabled: true,
+            error: "memory workspace is unavailable",
+          });
+        }
+
+        try {
+          const graph = await buildMemoryKnowledgeGraph({
+            workspaceDir,
+            readFile: async (relPath) => {
+              const file = await memory.manager.readFile({ relPath });
+              return file.text;
+            },
+          });
+          const events = queryTimeline({
+            graph,
+            subject: subject ?? undefined,
+            entityType: entityType ?? undefined,
+            from: from ?? undefined,
+            to: to ?? undefined,
+            limit: limit ?? undefined,
+          });
+          return jsonResult({
+            subject: subject ?? null,
+            entityType: entityType ?? null,
+            range: { from: from ?? null, to: to ?? null },
+            counts: {
+              nodes: graph.nodes.length,
+              edges: graph.edges.length,
+              events: graph.events.length,
+            },
+            events,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return jsonResult({ events: [], disabled: true, error: message });
+        }
+      },
+  });
+}
+
+export function createMemoryCausalQueryTool(options: {
+  config?: OpenClawConfig;
+  agentSessionKey?: string;
+}): AnyAgentTool | null {
+  return createMemoryTool({
+    options,
+    label: "Memory Causal Query",
+    name: "memory_causal_query",
+    description:
+      "Find likely causes for an effect from long-term memory notes using explicit causal cues (because/due to/led to/因为/导致/所以).",
+    parameters: MemoryCausalQuerySchema,
+    execute:
+      ({ cfg, agentId }) =>
+      async (_toolCallId, params) => {
+        const effect = readStringParam(params, "effect", { required: true });
+        const limit = readNumberParam(params, "limit", { integer: true });
+
+        const memory = await getMemoryManagerContext({ cfg, agentId });
+        if ("error" in memory) {
+          return jsonResult({ matches: [], disabled: true, error: memory.error });
+        }
+
+        const workspaceDir = memory.manager.status().workspaceDir;
+        if (!workspaceDir) {
+          return jsonResult({
+            matches: [],
+            disabled: true,
+            error: "memory workspace is unavailable",
+          });
+        }
+
+        try {
+          const graph = await buildMemoryKnowledgeGraph({
+            workspaceDir,
+            readFile: async (relPath) => {
+              const file = await memory.manager.readFile({ relPath });
+              return file.text;
+            },
+          });
+          const matches = queryCausality({
+            graph,
+            effect,
+            limit: limit ?? undefined,
+          });
+          return jsonResult({
+            effect,
+            counts: {
+              nodes: graph.nodes.length,
+              edges: graph.edges.length,
+              events: graph.events.length,
+              matches: matches.length,
+            },
+            matches,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return jsonResult({ matches: [], disabled: true, error: message });
         }
       },
   });

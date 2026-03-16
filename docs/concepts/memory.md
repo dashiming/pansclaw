@@ -36,6 +36,8 @@ PansClaw exposes two agent-facing tools for these Markdown files:
 
 - `memory_search` — semantic recall over indexed snippets.
 - `memory_get` — targeted read of a specific Markdown file/line range.
+- `memory_timeline` — timeline trace for people/projects/preferences from long-term memory.
+- `memory_causal_query` — likely cause analysis from explicit causal notes (because/due to/led to/因为/导致/所以).
 
 `memory_get` now **degrades gracefully when a file doesn't exist** (for example,
 today's daily log before the first write). Both the builtin manager and the QMD

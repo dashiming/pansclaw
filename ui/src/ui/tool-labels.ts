@@ -21,6 +21,8 @@ export const TOOL_LABELS: Record<string, string> = {
   nodes: "Nodes",
   memory_search: "Search Memory",
   memory_get: "Get Memory",
+  memory_timeline: "Memory Timeline",
+  memory_causal_query: "Causal Query",
   session_status: "Session Status",
   sessions_list: "List Sessions",
   sessions_history: "Session History",

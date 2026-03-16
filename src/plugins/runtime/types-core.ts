@@ -34,8 +34,10 @@ export type PluginRuntimeCore = {
     transcribeAudioFile: typeof import("../../media-understanding/transcribe-audio.js").transcribeAudioFile;
   };
   tools: {
+    createMemoryCausalQueryTool: typeof import("../../agents/tools/memory-tool.js").createMemoryCausalQueryTool;
     createMemoryGetTool: typeof import("../../agents/tools/memory-tool.js").createMemoryGetTool;
     createMemorySearchTool: typeof import("../../agents/tools/memory-tool.js").createMemorySearchTool;
+    createMemoryTimelineTool: typeof import("../../agents/tools/memory-tool.js").createMemoryTimelineTool;
     registerMemoryCli: typeof import("../../cli/memory-cli.js").registerMemoryCli;
   };
   events: {

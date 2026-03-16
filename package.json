@@ -1,6 +1,6 @@
 {
   "name": "pansclaw",
-  "version": "2026.3.14",
+  "version": "0.2.0",
   "description": "Multi-channel AI gateway with extensible messaging integrations",
   "keywords": [],
   "homepage": "https://github.com/dashiming/pansclaw#readme",
@@ -14,8 +14,8 @@
     "url": "git+https://github.com/dashiming/pansclaw.git"
   },
   "bin": {
-    "pansclaw": "openclaw.mjs",
-    "openclaw": "openclaw.mjs"
+    "openclaw": "openclaw.mjs",
+    "pansclaw": "openclaw.mjs"
   },
   "directories": {
     "doc": "docs",
