@@ -16,15 +16,15 @@
 ### 方式一：全局安装（推荐）
 
 ```bash
-npm install -g openclaw@latest
+npm install -g pansclaw@latest
 # 或
-pnpm add -g openclaw@latest
+pnpm add -g pansclaw@latest
 ```
 
 ### 方式二：初始化与引导
 
 ```bash
-openclaw onboard --install-daemon
+pansclaw onboard --install-daemon
 ```
 
 ### 方式三：从源码安装
