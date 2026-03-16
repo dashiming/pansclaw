@@ -4,6 +4,14 @@
   <img src="image/1.png" alt="PansClaw" width="180">
 </p>
 
+<p align="center">
+  Pan'sPower 提供算力支持
+</p>
+
+<p align="center">
+  <img src="image/4.png" alt="Pan'sPower" width="200">
+</p>
+
 ## 特性
 
 - 多通道 AI 助手能力（网关统一接入）

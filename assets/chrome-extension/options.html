@@ -265,6 +265,31 @@
     .status[data-kind='error'] {
       color: color-mix(in oklab, #ef4444 75%, canvasText 25%);
     }
+
+    .support-footer {
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid color-mix(in oklab, var(--accent) 24%, transparent);
+      background: color-mix(in oklab, var(--accent) 8%, canvas);
+      box-shadow: var(--shadow);
+      color: color-mix(in oklab, canvasText 84%, var(--accent) 16%);
+      font-size: 12px;
+      letter-spacing: 0.01em;
+    }
+
+    .support-footer img {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+      background: canvas;
+    }
   </style>
 </head>
 
@@ -330,6 +355,11 @@
         </div>
         <div class="status" id="status"></div>
       </div>
+    </div>
+
+    <div class="support-footer" aria-label="Compute support">
+      <img src="icons/panspower.png" alt="Pan'sPower" />
+      <span>Pan'sPower provides compute support.</span>
     </div>
 
     <script type="module" src="options.js"></script>
