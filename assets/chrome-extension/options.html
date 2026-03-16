@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PansClaw Browser Relay</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --accent: #2563eb;
+      --panel: color-mix(in oklab, canvas 92%, canvasText 8%);
+      --border: color-mix(in oklab, canvasText 18%, transparent);
+      --muted: color-mix(in oklab, canvasText 70%, transparent);
+      --shadow: 0 10px 30px color-mix(in oklab, canvasText 18%, transparent);
+      font-family: ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Rounded",
+        "SF Pro Display", "Segoe UI", sans-serif;
+      line-height: 1.4;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(1000px 500px at 10% 0%, color-mix(in oklab, var(--accent) 30%, transparent), transparent 70%),
+        radial-gradient(900px 450px at 90% 0%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 75%),
+        canvas;
+      color: canvasText;
+    }
+
+    .wrap {
+      max-width: 820px;
+      margin: 36px auto;
+      padding: 0 24px 48px 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: color-mix(in oklab, var(--accent) 18%, transparent);
+      border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+      box-shadow: var(--shadow);
+      display: grid;
+      place-items: center;
+    }
+
+    .logo img {
+      width: 28px;
+      height: 28px;
+      image-rendering: pixelated;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+      margin: 2px 0 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .banner {
+      background: color-mix(in oklab, var(--accent) 10%, canvas);
+      border: 1px solid color-mix(in oklab, var(--accent) 28%, transparent);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .banner[data-kind='error'] {
+      background: color-mix(in oklab, #ef4444 10%, canvas);
+      border-color: color-mix(in oklab, #ef4444 28%, transparent);
+    }
+
+    .banner h2 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+
+    .banner p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .banner-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .banner-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+      background: color-mix(in oklab, var(--accent) 15%, transparent);
+      color: canvasText;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .banner-link[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .steps {
+      margin: 10px 0 0 18px;
+      padding: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .steps li+li {
+      margin-top: 8px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      letter-spacing: 0.01em;
+    }
+
+    .card p {
+      margin: 8px 0 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 160px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, canvas 92%, canvasText 8%);
+      color: canvasText;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 20%, transparent);
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+      background: linear-gradient(180deg,
+          color-mix(in oklab, var(--accent) 80%, white 20%),
+          var(--accent));
+      color: white;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .token-help {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px dashed color-mix(in oklab, var(--accent) 30%, transparent);
+      background: color-mix(in oklab, var(--accent) 6%, canvas);
+    }
+
+    .token-help strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .token-help p {
+      margin: 0 0 8px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .token-help code {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: color-mix(in oklab, canvas 88%, canvasText 12%);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    code {
+      font-family: ui-monospace, Menlo, Monaco, Consolas, "SF Mono", monospace;
+      font-size: 12px;
+    }
+
+    a {
+      color: color-mix(in oklab, var(--accent) 85%, canvasText 15%);
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: color-mix(in oklab, var(--accent) 70%, canvasText 30%);
+      min-height: 16px;
+    }
+
+    .status[data-kind='ok'] {
+      color: color-mix(in oklab, #16a34a 75%, canvasText 25%);
+    }
+
+    .status[data-kind='error'] {
+      color: color-mix(in oklab, #ef4444 75%, canvasText 25%);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true">
+        <img src="icons/logo1.png" alt="" />
+      </div>
+      <div>
+        <h1>PansClaw Browser Relay</h1>
+        <p class="subtitle">Click the toolbar button on a tab to attach / detach.</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="banner" id="setup-banner" data-kind="info">
+        <h2 id="setup-banner-title">First-time setup</h2>
+        <p id="setup-banner-text">Set the relay port to 18792 and paste your Gateway token once. The extension will
+          remember it.</p>
+        <div class="banner-actions">
+          <button class="banner-link" id="open-dashboard" type="button" disabled>Open PansClaw Dashboard</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Quick setup</h2>
+        <ol class="steps">
+          <li>Keep the relay port at <code>18792</code>.</li>
+          <li>Paste your <code>gateway.auth.token</code> into the Gateway token field below.</li>
+          <li>Click <strong>Save &amp; Open Dashboard</strong>. On success, the Dashboard opens automatically.
+          </li>
+        </ol>
+        <p>
+          If you see a red <code>!</code> badge on the extension icon, open this page again. It will tell you whether
+          the problem is a missing token, a wrong port, or a relay that is not running.
+        </p>
+        <p>
+          Full guide (install, remote Gateway, security): <a href="https://docs.openclaw.ai/tools/chrome-extension"
+            target="_blank" rel="noreferrer">Documentation</a>
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Relay connection</h2>
+        <label for="port">Port</label>
+        <div class="row">
+          <input id="port" inputmode="numeric" pattern="[0-9]*" />
+        </div>
+        <label for="token" style="margin-top: 10px">Gateway token</label>
+        <div class="row">
+          <input id="token" type="password" autocomplete="off" style="width: min(520px, 100%)" />
+          <button id="save" type="button">Save &amp; Open Dashboard</button>
+        </div>
+        <div class="hint">
+          Default port: <code>18792</code>. Extension connects to: <code
+            id="relay-url">http://127.0.0.1:&lt;port&gt;/</code>.
+          Gateway token must match <code>gateway.auth.token</code>.
+        </div>
+        <div class="token-help">
+          <strong>How to get the token</strong>
+          <p>Open your PansClaw config file and copy <code>gateway.auth.token</code>.</p>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <script type="module" src="options.js"></script>
+  </div>
+</body>
+
+</html>
