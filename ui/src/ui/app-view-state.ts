@@ -11,6 +11,7 @@ import type { UiSettings } from "./storage.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ResolvedTheme, ThemeMode, ThemeName } from "./theme.ts";
 import type {
+  AuthProfilesListResult,
   AgentsListResult,
   AgentsFilesListResult,
   AgentIdentityResult,
@@ -140,6 +141,30 @@ export type AppViewState = {
   aiAgentsSearchQuery: string;
   aiAgentsActiveSection: string | null;
   aiAgentsActiveSubsection: string | null;
+  modelSetupSelectedModel: string;
+  modelSetupModelSaving: boolean;
+  modelSetupModelMessage: { kind: "success" | "error"; text: string } | null;
+  envFileAvailable: boolean | null;
+  envFileEntries: Record<string, string>;
+  envFileLoading: boolean;
+  envFileWriting: boolean;
+  envFileMessage: { kind: "success" | "error"; text: string } | null;
+  authProfilesLoading: boolean;
+  authProfilesError: string | null;
+  authProfilesResult: AuthProfilesListResult | null;
+  authProfilesDrafts: Record<string, string>;
+  authProfilesSavingProvider: string | null;
+  authProfilesMessages: Record<string, { kind: "success" | "error"; message: string }>;
+  authProfilesFilter: string;
+  chatQuickApiKeyModal: {
+    open: boolean;
+    provider: string;
+    label: string;
+    error: string | null;
+    saving: boolean;
+    pendingModel?: string;
+  } | null;
+  chatQuickApiKeyDraft: string;
   channelsLoading: boolean;
   channelsSnapshot: ChannelsStatusSnapshot | null;
   channelsError: string | null;

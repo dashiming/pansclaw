@@ -11,6 +11,7 @@ import type { PansClawApp } from "./app.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
+import { loadAuthProfiles } from "./controllers/auth-profiles.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronRuns, loadCronStatus } from "./controllers/cron.ts";
@@ -20,6 +21,7 @@ import { loadExecApprovals } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
+import { loadEnvFile, refreshProviderSetupModels } from "./controllers/provider-setup.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import { loadUsage } from "./controllers/usage.ts";
@@ -258,12 +260,15 @@ export async function refreshActiveTab(host: SettingsHost) {
   }
   if (host.tab === "chat") {
     await refreshChat(host as unknown as Parameters<typeof refreshChat>[0]);
+    // Load auth profiles for quick API key configuration in model selector
+    await loadAuthProfiles(host as unknown as PansClawApp);
     scheduleChatScroll(
       host as unknown as Parameters<typeof scheduleChatScroll>[0],
       !host.chatHasAutoScrolled,
     );
   }
   if (
+    host.tab === "modelSetup" ||
     host.tab === "config" ||
     host.tab === "communications" ||
     host.tab === "appearance" ||
@@ -282,6 +287,14 @@ export async function refreshActiveTab(host: SettingsHost) {
     host.logsAtBottom = true;
     await loadLogs(host as unknown as PansClawApp, { reset: true });
     scheduleLogsScroll(host as unknown as Parameters<typeof scheduleLogsScroll>[0], true);
+  }
+  if (host.tab === "aiAgents") {
+    await loadAuthProfiles(host as unknown as PansClawApp);
+  }
+  if (host.tab === "modelSetup") {
+    await loadAuthProfiles(host as unknown as PansClawApp);
+    await refreshProviderSetupModels(host as unknown as PansClawApp);
+    await loadEnvFile(host as unknown as PansClawApp);
   }
 }
 

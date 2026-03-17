@@ -6,6 +6,10 @@ import { refreshChat } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { PansClawApp } from "./app.ts";
+import {
+  closeChatQuickApiKeyModal,
+  saveChatQuickApiKey,
+} from "./controllers/chat-quick-api-key.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { icons } from "./icons.ts";
@@ -129,7 +133,58 @@ function renderCronFilterIcon(hiddenCount: number) {
 export function renderChatSessionSelect(state: AppViewState) {
   const sessionGroups = resolveSessionOptionGroups(state, state.sessionKey, state.sessionsResult);
   const modelSelect = renderChatModelSelect(state);
+  const apiKeyInline = renderChatQuickApiKeyInline(state);
   return html`
+    <style>
+      .chat-controls__session-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .chat-controls__api-key-inline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 8px 10px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+        border-radius: 10px;
+        background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+        max-width: min(100%, 760px);
+      }
+
+      .chat-controls__api-key-inline-copy {
+        font-size: 12px;
+        color: var(--color-text-secondary, #9ca3af);
+        white-space: normal;
+      }
+
+      .chat-controls__api-key-inline-input {
+        min-width: 220px;
+        flex: 1 1 260px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+        background: var(--bg-panel, rgba(15, 23, 42, 0.55));
+        color: var(--color-text, #fff);
+        font-size: 13px;
+        font-family: monospace;
+      }
+
+      .chat-controls__api-key-inline-input:focus {
+        outline: none;
+        border-color: var(--color-accent, #3b82f6);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+      }
+
+      .chat-controls__api-key-inline-error {
+        flex-basis: 100%;
+        font-size: 12px;
+        color: #fca5a5;
+      }
+    </style>
     <div class="chat-controls__session-row">
       <label class="field chat-controls__session">
         <select
@@ -161,6 +216,86 @@ export function renderChatSessionSelect(state: AppViewState) {
         </select>
       </label>
       ${modelSelect}
+      ${apiKeyInline}
+    </div>
+  `;
+}
+
+function renderChatQuickApiKeyInline(state: AppViewState) {
+  const currentOverride = resolveModelOverrideValue(state);
+  const defaultModel = resolveDefaultModelValue(state);
+  const stagedModel = state.chatQuickApiKeyModal?.pendingModel;
+  const pendingModel =
+    stagedModel === undefined ? currentOverride || defaultModel : stagedModel.trim();
+  const pendingEntry = state.chatModelCatalog?.find((entry) => entry.id === pendingModel);
+  const provider = pendingEntry?.provider || pendingModel.split("/")[0] || "";
+  const providerProfile = state.authProfilesResult?.providers?.find(
+    (entry) => entry.provider === provider,
+  );
+  const providerLabel = providerProfile?.label || provider || "provider";
+  const isConfigured = providerProfile?.configured === true;
+  const saving = state.chatQuickApiKeyModal?.saving === true;
+  const error = state.chatQuickApiKeyModal?.error ?? null;
+  const keyValue = state.chatQuickApiKeyDraft ?? "";
+  const hasModelChange = stagedModel !== undefined && pendingModel !== currentOverride;
+  const canApplyWithKey = Boolean(provider) && keyValue.trim().length > 0;
+  const canApply = !saving && (hasModelChange || canApplyWithKey);
+
+  return html`
+    <div class="chat-controls__api-key-inline">
+      <span class="chat-controls__api-key-inline-copy">
+        ${
+          pendingModel
+            ? html`${providerLabel} · ${pendingModel}${isConfigured ? "（已配置，可直接点确定）" : "（可填写 API Key 后确定）"}`
+            : "请先选择模型"
+        }
+      </span>
+      <input
+        class="chat-controls__api-key-inline-input"
+        type="password"
+        placeholder=${provider ? `输入 ${providerLabel} API Key（可选）` : "选择模型后输入 API Key"}
+        .value=${keyValue}
+        ?disabled=${saving || !provider}
+        @input=${(e: Event) => {
+          state.chatQuickApiKeyDraft = (e.target as HTMLInputElement).value;
+          if (state.chatQuickApiKeyModal?.error) {
+            state.chatQuickApiKeyModal.error = null;
+          }
+        }}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === "Enter" && canApply) {
+            e.preventDefault();
+            void applyChatModelAndApiKey(state, {
+              pendingModel,
+              provider,
+              apiKey: state.chatQuickApiKeyDraft,
+            });
+          }
+        }}
+      />
+      <button
+        class="btn btn--sm"
+        type="button"
+        ?disabled=${!canApply}
+        @click=${() => {
+          void applyChatModelAndApiKey(state, {
+            pendingModel,
+            provider,
+            apiKey: state.chatQuickApiKeyDraft,
+          });
+        }}
+      >
+        ${saving ? "应用中..." : "确定"}
+      </button>
+      <button
+        class="btn btn--sm btn--ghost"
+        type="button"
+        ?disabled=${saving}
+        @click=${() => closeChatQuickApiKeyModal(state)}
+      >
+        Cancel
+      </button>
+      ${error ? html`<div class="chat-controls__api-key-inline-error">${error}</div>` : nothing}
     </div>
   `;
 }
@@ -576,7 +711,8 @@ function buildChatModelOptions(
 }
 
 function renderChatModelSelect(state: AppViewState) {
-  const currentOverride = resolveModelOverrideValue(state);
+  const currentOverride =
+    state.chatQuickApiKeyModal?.pendingModel ?? resolveModelOverrideValue(state);
   const defaultModel = resolveDefaultModelValue(state);
   const options = buildChatModelOptions(
     state.chatModelCatalog ?? [],
@@ -594,9 +730,9 @@ function renderChatModelSelect(state: AppViewState) {
         data-chat-model-select="true"
         aria-label="Chat model"
         ?disabled=${disabled}
-        @change=${async (e: Event) => {
+        @change=${(e: Event) => {
           const next = (e.target as HTMLSelectElement).value.trim();
-          await switchChatModel(state, next);
+          stageChatModelSelection(state, next);
         }}
       >
         <option value="" ?selected=${currentOverride === ""}>${defaultLabel}</option>
@@ -613,6 +749,46 @@ function renderChatModelSelect(state: AppViewState) {
   `;
 }
 
+function stageChatModelSelection(state: AppViewState, nextModel: string) {
+  const modelEntry = state.chatModelCatalog?.find((entry) => entry.id === nextModel);
+  const provider = modelEntry?.provider || nextModel.split("/")[0] || "";
+  const providerEntry = state.authProfilesResult?.providers?.find(
+    (entry) => entry.provider === provider,
+  );
+  state.chatQuickApiKeyModal = {
+    open: true,
+    provider,
+    label: providerEntry?.label || provider || "provider",
+    error: null,
+    saving: false,
+    pendingModel: nextModel,
+  };
+}
+
+async function applyChatModelAndApiKey(
+  state: AppViewState,
+  params: { pendingModel: string; provider: string; apiKey: string },
+) {
+  const pendingModel = params.pendingModel?.trim() || "";
+  const provider = params.provider?.trim() || "";
+  const apiKey = params.apiKey?.trim() || "";
+  const hasStagedModel = state.chatQuickApiKeyModal?.pendingModel !== undefined;
+  if (!state.client || !state.connected) {
+    return;
+  }
+  if (!hasStagedModel && !apiKey) {
+    return;
+  }
+  if (apiKey && provider) {
+    await saveChatQuickApiKey(state, provider, apiKey, { pendingModel });
+    return;
+  }
+  if (hasStagedModel) {
+    await switchChatModel(state, pendingModel);
+    closeChatQuickApiKeyModal(state);
+  }
+}
+
 async function switchChatModel(state: AppViewState, nextModel: string) {
   if (!state.client || !state.connected) {
     return;
@@ -621,6 +797,7 @@ async function switchChatModel(state: AppViewState, nextModel: string) {
   if (currentOverride === nextModel) {
     return;
   }
+
   const targetSessionKey = state.sessionKey;
   const prevOverride = state.chatModelOverrides[targetSessionKey];
   state.lastError = null;

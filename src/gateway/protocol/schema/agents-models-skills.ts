@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { NonEmptyString } from "./primitives.js";
+import { NonEmptyString, SecretRefSchema } from "./primitives.js";
 
 export const ModelChoiceSchema = Type.Object(
   {
@@ -169,6 +169,70 @@ export const ModelsListParamsSchema = Type.Object({}, { additionalProperties: fa
 export const ModelsListResultSchema = Type.Object(
   {
     models: Type.Array(ModelChoiceSchema),
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesListParamsSchema = Type.Object({}, { additionalProperties: false });
+
+export const AuthProfileProviderEntrySchema = Type.Object(
+  {
+    provider: NonEmptyString,
+    label: NonEmptyString,
+    profileId: Type.Optional(NonEmptyString),
+    configured: Type.Boolean(),
+    canDelete: Type.Boolean(),
+    source: Type.Union([
+      Type.Literal("none"),
+      Type.Literal("api_key"),
+      Type.Literal("env_ref"),
+      Type.Literal("oauth"),
+      Type.Literal("token"),
+    ]),
+    secretRef: Type.Optional(SecretRefSchema),
+    modelCount: Type.Integer({ minimum: 0 }),
+    sampleModels: Type.Array(NonEmptyString),
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesListResultSchema = Type.Object(
+  {
+    agentId: NonEmptyString,
+    providers: Type.Array(AuthProfileProviderEntrySchema),
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesSetParamsSchema = Type.Object(
+  {
+    provider: NonEmptyString,
+    apiKey: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesSetResultSchema = Type.Object(
+  {
+    ok: Type.Literal(true),
+    provider: NonEmptyString,
+    profileId: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesRemoveParamsSchema = Type.Object(
+  {
+    provider: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const AuthProfilesRemoveResultSchema = Type.Object(
+  {
+    ok: Type.Literal(true),
+    provider: NonEmptyString,
+    removed: Type.Boolean(),
   },
   { additionalProperties: false },
 );
