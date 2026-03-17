@@ -632,6 +632,11 @@ export type ModelCatalogEntry = {
   input?: Array<"text" | "image">;
 };
 
+export type AuthProfileProviderEntry =
+  import("../../../src/gateway/protocol/schema/types.js").AuthProfileProviderEntry;
+export type AuthProfilesListResult =
+  import("../../../src/gateway/protocol/schema/types.js").AuthProfilesListResult;
+
 export type ToolCatalogProfile =
   import("../../../src/gateway/protocol/schema/types.js").ToolCatalogProfile;
 export type ToolCatalogEntry =

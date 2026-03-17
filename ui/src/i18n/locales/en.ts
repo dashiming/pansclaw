@@ -28,6 +28,7 @@ export const en: TranslationMap = {
   },
   tabs: {
     agents: "Agents",
+    modelSetup: "Model Setup",
     overview: "Overview",
     channels: "Channels",
     instances: "Instances",
@@ -48,6 +49,7 @@ export const en: TranslationMap = {
   },
   subtitles: {
     agents: "Workspaces, tools, identities.",
+    modelSetup: "Set default model and provider API keys quickly.",
     overview: "Status, entry points, health.",
     channels: "Channels and settings.",
     instances: "Connected clients and nodes.",

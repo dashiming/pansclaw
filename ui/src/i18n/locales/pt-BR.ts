@@ -27,6 +27,7 @@ export const pt_BR: TranslationMap = {
   },
   tabs: {
     agents: "Agentes",
+    modelSetup: "Modelos",
     overview: "Visão Geral",
     channels: "Canais",
     instances: "Instâncias",
@@ -47,6 +48,7 @@ export const pt_BR: TranslationMap = {
   },
   subtitles: {
     agents: "Espaços, ferramentas, identidades.",
+    modelSetup: "Configure modelo padrão e chaves de API rapidamente.",
     overview: "Status, entrada, saúde.",
     channels: "Canais e configurações.",
     instances: "Clientes e nós conectados.",

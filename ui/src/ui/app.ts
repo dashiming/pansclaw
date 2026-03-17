@@ -64,6 +64,7 @@ import type { Tab } from "./navigation.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { VALID_THEME_NAMES, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
 import type {
+  AuthProfilesListResult,
   AgentsListResult,
   AgentsFilesListResult,
   AgentIdentityResult,
@@ -234,6 +235,31 @@ export class PansClawApp extends LitElement {
   @state() aiAgentsSearchQuery = "";
   @state() aiAgentsActiveSection: string | null = null;
   @state() aiAgentsActiveSubsection: string | null = null;
+  @state() modelSetupSelectedModel = "";
+  @state() modelSetupModelSaving = false;
+  @state() modelSetupModelMessage: { kind: "success" | "error"; text: string } | null = null;
+  @state() envFileAvailable: boolean | null = null;
+  @state() envFileEntries: Record<string, string> = {};
+  @state() envFileLoading = false;
+  @state() envFileWriting = false;
+  @state() envFileMessage: { kind: "success" | "error"; text: string } | null = null;
+  @state() authProfilesLoading = false;
+  @state() authProfilesError: string | null = null;
+  @state() authProfilesResult: AuthProfilesListResult | null = null;
+  @state() authProfilesDrafts: Record<string, string> = {};
+  @state() authProfilesSavingProvider: string | null = null;
+  @state() authProfilesMessages: Record<string, { kind: "success" | "error"; message: string }> =
+    {};
+  @state() authProfilesFilter = "";
+  @state() chatQuickApiKeyModal: {
+    open: boolean;
+    provider: string;
+    label: string;
+    error: string | null;
+    saving: boolean;
+    pendingModel?: string;
+  } | null = null;
+  @state() chatQuickApiKeyDraft = "";
 
   @state() channelsLoading = false;
   @state() channelsSnapshot: ChannelsStatusSnapshot | null = null;

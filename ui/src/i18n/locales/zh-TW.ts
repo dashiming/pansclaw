@@ -27,6 +27,7 @@ export const zh_TW: TranslationMap = {
   },
   tabs: {
     agents: "代理",
+    modelSetup: "模型設置",
     overview: "概覽",
     channels: "頻道",
     instances: "實例",
@@ -47,6 +48,7 @@ export const zh_TW: TranslationMap = {
   },
   subtitles: {
     agents: "工作區、工具、身份。",
+    modelSetup: "快速設置默認模型和對應 API Key。",
     overview: "狀態、入口點、健康。",
     channels: "頻道和設置。",
     instances: "已連接客戶端和節點。",

@@ -24,6 +24,15 @@ function createChatHeaderState(
     model?: string | null;
     models?: ModelCatalogEntry[];
     omitSessionFromList?: boolean;
+    authProfilesProviders?: Array<{
+      provider: string;
+      label: string;
+      configured: boolean;
+      canDelete?: boolean;
+      source?: "none" | "api_key" | "env_ref" | "oauth" | "token";
+      modelCount?: number;
+      sampleModels?: string[];
+    }>;
   } = {},
 ): { state: AppViewState; request: ReturnType<typeof vi.fn> } {
   let currentModel = overrides.model ?? null;
@@ -32,6 +41,17 @@ function createChatHeaderState(
     { id: "gpt-5", name: "GPT-5", provider: "openai" },
     { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "openai" },
   ];
+  const authProfilesProviders =
+    overrides.authProfilesProviders ??
+    Array.from(new Set(catalog.map((entry) => entry.provider))).map((provider) => ({
+      provider,
+      label: provider,
+      configured: true,
+      canDelete: false,
+      source: "none" as const,
+      modelCount: catalog.filter((entry) => entry.provider === provider).length,
+      sampleModels: catalog.filter((entry) => entry.provider === provider).map((entry) => entry.id),
+    }));
   const request = vi.fn(async (method: string, params: Record<string, unknown>) => {
     if (method === "sessions.patch") {
       currentModel = (params.model as string | null | undefined) ?? null;
@@ -53,6 +73,12 @@ function createChatHeaderState(
     }
     if (method === "models.list") {
       return { models: catalog };
+    }
+    if (method === "auth.profiles.list") {
+      return {
+        agentId: "main",
+        providers: authProfilesProviders,
+      };
     }
     throw new Error(`Unexpected request: ${method}`);
   });
@@ -568,6 +594,14 @@ describe("chat view", () => {
     modelSelect!.value = "gpt-5-mini";
     modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
     await flushTasks();
+    render(renderChatSessionSelect(state), container);
+
+    const applyButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "确定",
+    );
+    expect(applyButton).not.toBeUndefined();
+    applyButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushTasks();
 
     expect(request).toHaveBeenCalledWith("sessions.patch", {
       key: "main",
@@ -598,6 +632,14 @@ describe("chat view", () => {
     modelSelect!.value = "";
     modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
     await flushTasks();
+    render(renderChatSessionSelect(state), container);
+
+    const applyButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "确定",
+    );
+    expect(applyButton).not.toBeUndefined();
+    applyButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushTasks();
 
     expect(request).toHaveBeenCalledWith("sessions.patch", {
       key: "main",
@@ -605,6 +647,124 @@ describe("chat view", () => {
     });
     expect(state.sessionsResult?.sessions[0]?.model).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("opens API key modal when selected model provider is unconfigured", async () => {
+    const { state, request } = createChatHeaderState({
+      models: [
+        { id: "gpt-5", name: "GPT-5", provider: "openai" },
+        { id: "anthropic/claude-opus-4-6", name: "Claude Opus", provider: "anthropic" },
+      ],
+      authProfilesProviders: [
+        {
+          provider: "openai",
+          label: "OpenAI",
+          configured: true,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["gpt-5"],
+        },
+        {
+          provider: "anthropic",
+          label: "Anthropic",
+          configured: false,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["anthropic/claude-opus-4-6"],
+        },
+      ],
+    });
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
+    expect(modelSelect).not.toBeNull();
+
+    modelSelect!.value = "anthropic/claude-opus-4-6";
+    modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushTasks();
+
+    expect(state.chatQuickApiKeyModal?.open).toBe(true);
+    expect(state.chatQuickApiKeyModal?.provider).toBe("anthropic");
+    expect(state.chatQuickApiKeyModal?.pendingModel).toBe("anthropic/claude-opus-4-6");
+    expect(request).not.toHaveBeenCalledWith("sessions.patch", expect.anything());
+  });
+
+  it("opens API key modal when provider is absent from auth profile list", async () => {
+    const { state, request } = createChatHeaderState({
+      models: [{ id: "anthropic/claude-opus-4-6", name: "Claude Opus", provider: "anthropic" }],
+      authProfilesProviders: [],
+    });
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
+    expect(modelSelect).not.toBeNull();
+
+    modelSelect!.value = "anthropic/claude-opus-4-6";
+    modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushTasks();
+
+    expect(state.chatQuickApiKeyModal?.open).toBe(true);
+    expect(state.chatQuickApiKeyModal?.provider).toBe("anthropic");
+    expect(state.chatQuickApiKeyModal?.label).toBe("anthropic");
+    expect(request).not.toHaveBeenCalledWith("sessions.patch", expect.anything());
+  });
+
+  it("renders inline API key controls beside the model selector", async () => {
+    const { state } = createChatHeaderState({
+      models: [
+        { id: "gpt-5", name: "GPT-5", provider: "openai" },
+        { id: "anthropic/claude-opus-4-6", name: "Claude Opus", provider: "anthropic" },
+      ],
+      authProfilesProviders: [
+        {
+          provider: "openai",
+          label: "OpenAI",
+          configured: true,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["gpt-5"],
+        },
+        {
+          provider: "anthropic",
+          label: "Anthropic",
+          configured: false,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["anthropic/claude-opus-4-6"],
+        },
+      ],
+    });
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
+    modelSelect!.value = "anthropic/claude-opus-4-6";
+    modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushTasks();
+    render(renderChatSessionSelect(state), container);
+
+    const apiKeyInput = container.querySelector<HTMLInputElement>(
+      ".chat-controls__api-key-inline-input",
+    );
+    const applyButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "确定",
+    );
+
+    expect(apiKeyInput).not.toBeNull();
+    expect(applyButton).not.toBeUndefined();
+    expect(container.textContent).toContain("anthropic/claude-opus-4-6");
   });
 
   it("disables the chat header model picker while a run is active", () => {

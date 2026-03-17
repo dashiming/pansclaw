@@ -32,6 +32,20 @@ import {
   AgentsFilesListParamsSchema,
   type AgentsFilesListResult,
   AgentsFilesListResultSchema,
+  type AuthProfileProviderEntry,
+  AuthProfileProviderEntrySchema,
+  type AuthProfilesListParams,
+  AuthProfilesListParamsSchema,
+  type AuthProfilesListResult,
+  AuthProfilesListResultSchema,
+  type AuthProfilesRemoveParams,
+  AuthProfilesRemoveParamsSchema,
+  type AuthProfilesRemoveResult,
+  AuthProfilesRemoveResultSchema,
+  type AuthProfilesSetParams,
+  AuthProfilesSetParamsSchema,
+  type AuthProfilesSetResult,
+  AuthProfilesSetResultSchema,
   type AgentsFilesSetParams,
   AgentsFilesSetParamsSchema,
   type AgentsFilesSetResult,
@@ -279,6 +293,27 @@ export const validateAgentsFilesGetParams = ajv.compile<AgentsFilesGetParams>(
 );
 export const validateAgentsFilesSetParams = ajv.compile<AgentsFilesSetParams>(
   AgentsFilesSetParamsSchema,
+);
+export const validateAuthProfilesListParams = ajv.compile<AuthProfilesListParams>(
+  AuthProfilesListParamsSchema,
+);
+export const validateAuthProfilesListResult = ajv.compile<AuthProfilesListResult>(
+  AuthProfilesListResultSchema,
+);
+export const validateAuthProfileProviderEntry = ajv.compile<AuthProfileProviderEntry>(
+  AuthProfileProviderEntrySchema,
+);
+export const validateAuthProfilesSetParams = ajv.compile<AuthProfilesSetParams>(
+  AuthProfilesSetParamsSchema,
+);
+export const validateAuthProfilesSetResult = ajv.compile<AuthProfilesSetResult>(
+  AuthProfilesSetResultSchema,
+);
+export const validateAuthProfilesRemoveParams = ajv.compile<AuthProfilesRemoveParams>(
+  AuthProfilesRemoveParamsSchema,
+);
+export const validateAuthProfilesRemoveResult = ajv.compile<AuthProfilesRemoveResult>(
+  AuthProfilesRemoveResultSchema,
 );
 export const validateNodePairRequestParams = ajv.compile<NodePairRequestParams>(
   NodePairRequestParamsSchema,
@@ -534,6 +569,13 @@ export {
   AgentsFilesGetResultSchema,
   AgentsFilesSetParamsSchema,
   AgentsFilesSetResultSchema,
+  AuthProfileProviderEntrySchema,
+  AuthProfilesListParamsSchema,
+  AuthProfilesListResultSchema,
+  AuthProfilesSetParamsSchema,
+  AuthProfilesSetResultSchema,
+  AuthProfilesRemoveParamsSchema,
+  AuthProfilesRemoveResultSchema,
   AgentsListParamsSchema,
   AgentsListResultSchema,
   ModelsListParamsSchema,
@@ -626,6 +668,13 @@ export type {
   AgentsFilesSetResult,
   AgentsListParams,
   AgentsListResult,
+  AuthProfileProviderEntry,
+  AuthProfilesListParams,
+  AuthProfilesListResult,
+  AuthProfilesSetParams,
+  AuthProfilesSetResult,
+  AuthProfilesRemoveParams,
+  AuthProfilesRemoveResult,
   SkillsStatusParams,
   ToolsCatalogParams,
   ToolsCatalogResult,

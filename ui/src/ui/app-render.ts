@@ -19,6 +19,12 @@ import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controlle
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog, saveAgentsConfig } from "./controllers/agents.ts";
+import {
+  loadAuthProfiles,
+  removeAuthProfile,
+  saveAuthProfile,
+  updateAuthProfileDraft,
+} from "./controllers/auth-profiles.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import {
@@ -68,6 +74,14 @@ import {
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
+import {
+  loadEnvFile,
+  refreshProviderSetupModels,
+  saveEnvFile,
+  saveProviderSetupDefaultModel,
+  updateEnvFileDraft,
+  updateProviderSetupModelSelection,
+} from "./controllers/provider-setup.ts";
 import { deleteSessionAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
 import {
   installSkill,
@@ -88,6 +102,7 @@ import {
   resolveModelPrimary,
   sortLocaleStrings,
 } from "./views/agents-utils.ts";
+import { renderApiKeys } from "./views/api-keys.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderCommandPalette } from "./views/command-palette.ts";
 import { renderConfig } from "./views/config.ts";
@@ -95,6 +110,7 @@ import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderLoginGate } from "./views/login-gate.ts";
 import { renderOverview } from "./views/overview.ts";
+import { renderProviderSetup } from "./views/provider-setup.ts";
 
 // Lazy-loaded view modules – deferred so the initial bundle stays small.
 // Each loader resolves once; subsequent calls return the cached module.
@@ -1802,8 +1818,57 @@ export function renderApp(state: AppViewState) {
         }
 
         ${
+          state.tab === "modelSetup"
+            ? renderProviderSetup({
+                client: state.client,
+                connected: state.connected,
+                configSnapshot: state.configSnapshot,
+                chatModelCatalog: state.chatModelCatalog,
+                chatModelsLoading: state.chatModelsLoading,
+                modelSetupSelectedModel: state.modelSetupSelectedModel,
+                modelSetupModelSaving: state.modelSetupModelSaving,
+                modelSetupModelMessage: state.modelSetupModelMessage,
+                authProfilesLoading: state.authProfilesLoading,
+                authProfilesResult: state.authProfilesResult,
+                authProfilesDrafts: state.authProfilesDrafts,
+                authProfilesSavingProvider: state.authProfilesSavingProvider,
+                authProfilesMessages: state.authProfilesMessages,
+                envFileAvailable: state.envFileAvailable,
+                envFileEntries: state.envFileEntries,
+                envFileLoading: state.envFileLoading,
+                envFileWriting: state.envFileWriting,
+                envFileMessage: state.envFileMessage,
+                onRefreshModels: () => refreshProviderSetupModels(state),
+                onModelSelect: (model) => updateProviderSetupModelSelection(state, model),
+                onSaveModel: () => saveProviderSetupDefaultModel(state),
+                onDraftChange: (provider, value) => updateAuthProfileDraft(state, provider, value),
+                onSaveProviderKey: (provider) => saveAuthProfile(state, provider),
+                onLoadEnvFile: () => loadEnvFile(state),
+                onEnvDraftChange: (key, value) => updateEnvFileDraft(state, key, value),
+                onSaveEnvFile: (updates) => saveEnvFile(state, updates),
+              })
+            : nothing
+        }
+
+        ${
           state.tab === "aiAgents"
-            ? renderConfig({
+            ? html`${renderApiKeys({
+                connected: state.connected,
+                authProfilesLoading: state.authProfilesLoading,
+                authProfilesError: state.authProfilesError,
+                authProfilesResult: state.authProfilesResult,
+                authProfilesDrafts: state.authProfilesDrafts,
+                authProfilesSavingProvider: state.authProfilesSavingProvider,
+                authProfilesMessages: state.authProfilesMessages,
+                authProfilesFilter: state.authProfilesFilter,
+                onRefresh: () => loadAuthProfiles(state),
+                onFilterChange: (next) => {
+                  state.authProfilesFilter = next;
+                },
+                onDraftChange: (provider, value) => updateAuthProfileDraft(state, provider, value),
+                onSave: (provider) => saveAuthProfile(state, provider),
+                onRemove: (provider) => removeAuthProfile(state, provider),
+              })}${renderConfig({
                 raw: state.configRaw,
                 originalRaw: state.configRawOriginal,
                 valid: state.configValid,
@@ -1861,7 +1926,7 @@ export function renderApp(state: AppViewState) {
                 navRootLabel: "AI & Agents",
                 includeSections: [...AI_AGENTS_SECTION_KEYS],
                 includeVirtualSections: false,
-              })
+              })}`
             : nothing
         }
 

@@ -60,6 +60,7 @@ const METHOD_SCOPE_GROUPS: Record<OperatorScope, readonly string[]> = {
     "tts.status",
     "tts.providers",
     "models.list",
+    "auth.profiles.list",
     "tools.catalog",
     "agents.list",
     "agent.identity.get",
@@ -130,10 +131,18 @@ const METHOD_SCOPE_GROUPS: Record<OperatorScope, readonly string[]> = {
     "set-heartbeats",
     "system-event",
     "agents.files.set",
+    "auth.profiles.set",
+    "auth.profiles.remove",
   ],
 };
 
-const ADMIN_METHOD_PREFIXES = ["exec.approvals.", "config.", "wizard.", "update."] as const;
+const ADMIN_METHOD_PREFIXES = [
+  "exec.approvals.",
+  "config.",
+  "wizard.",
+  "update.",
+  "env.file.",
+] as const;
 
 const METHOD_SCOPE_BY_NAME = new Map<string, OperatorScope>(
   Object.entries(METHOD_SCOPE_GROUPS).flatMap(([scope, methods]) =>
