@@ -100,6 +100,19 @@ describe("registerAgentCommands", () => {
     );
   });
 
+  it("forwards --disable-tools to the agent command", async () => {
+    await runCli(["agent", "--message", "hi", "--disable-tools"]);
+
+    expect(agentCliCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "hi",
+        disableTools: true,
+      }),
+      runtime,
+      { deps: true },
+    );
+  });
+
   it("runs agents add and computes hasFlags based on explicit options", async () => {
     await runCli(["agents", "add", "alpha"]);
     expect(agentsAddCommandMock).toHaveBeenNthCalledWith(

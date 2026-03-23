@@ -29,6 +29,7 @@ export function registerAgentCommands(program: Command, args: { agentChannelOpti
     .option("--agent <id>", "Agent id (overrides routing bindings)")
     .option("--thinking <level>", "Thinking level: off | minimal | low | medium | high | xhigh")
     .option("--verbose <on|off>", "Persist agent verbose level for the session")
+    .option("--disable-tools", "Run the agent in LLM-only mode without built-in tools", false)
     .option(
       "--channel <channel>",
       `Delivery channel: ${args.agentChannelOptions} (omit to use the main session channel)`,

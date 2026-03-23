@@ -394,6 +394,14 @@ describe("agentCommand", () => {
     expect(callArgs?.senderIsOwner).toBe(expected);
   });
 
+  it("forwards disableTools to embedded runner", async () => {
+    const callArgs = await runEmbeddedWithTempConfig({
+      args: { message: "hi", to: "+1555", disableTools: true },
+    });
+
+    expect(callArgs?.disableTools).toBe(true);
+  });
+
   it("requires explicit senderIsOwner for ingress runs", async () => {
     await withTempHome(async (home) => {
       const store = path.join(home, "sessions.json");

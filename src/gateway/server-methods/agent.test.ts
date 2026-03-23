@@ -633,6 +633,30 @@ describe("gateway agent handler", () => {
     );
   });
 
+  it("forwards disableTools to the ingress agent command", async () => {
+    mockMainSessionEntry({});
+    mocks.agentCommand.mockResolvedValue({
+      payloads: [{ text: "ok" }],
+      meta: { durationMs: 1 },
+    });
+
+    await invokeAgent(
+      {
+        message: "test",
+        agentId: "main",
+        sessionKey: "agent:main:main",
+        disableTools: true,
+        idempotencyKey: "test-disable-tools",
+      },
+      { reqId: "test-disable-tools" },
+    );
+
+    const call = mocks.agentCommand.mock.calls.at(-1)?.[0] as
+      | { disableTools?: boolean }
+      | undefined;
+    expect(call?.disableTools).toBe(true);
+  });
+
   it("rejects malformed session keys in agent.identity.get", async () => {
     const respond = await invokeAgentIdentityGet(
       {

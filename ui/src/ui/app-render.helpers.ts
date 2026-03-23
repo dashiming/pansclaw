@@ -779,13 +779,18 @@ async function applyChatModelAndApiKey(
   if (!hasStagedModel && !apiKey) {
     return;
   }
+  let keySaved = false;
   if (apiKey && provider) {
-    await saveChatQuickApiKey(state, provider, apiKey, { pendingModel });
-    return;
+    keySaved = await saveChatQuickApiKey(state, provider, apiKey);
+    if (!hasStagedModel) {
+      return;
+    }
   }
   if (hasStagedModel) {
     await switchChatModel(state, pendingModel);
-    closeChatQuickApiKeyModal(state);
+    if (!apiKey || keySaved) {
+      closeChatQuickApiKeyModal(state);
+    }
   }
 }
 

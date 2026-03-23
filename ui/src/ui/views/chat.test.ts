@@ -33,6 +33,7 @@ function createChatHeaderState(
       modelCount?: number;
       sampleModels?: string[];
     }>;
+    failAuthProfilesSet?: boolean;
   } = {},
 ): { state: AppViewState; request: ReturnType<typeof vi.fn> } {
   let currentModel = overrides.model ?? null;
@@ -52,6 +53,7 @@ function createChatHeaderState(
       modelCount: catalog.filter((entry) => entry.provider === provider).length,
       sampleModels: catalog.filter((entry) => entry.provider === provider).map((entry) => entry.id),
     }));
+  const failAuthProfilesSet = overrides.failAuthProfilesSet ?? false;
   const request = vi.fn(async (method: string, params: Record<string, unknown>) => {
     if (method === "sessions.patch") {
       currentModel = (params.model as string | null | undefined) ?? null;
@@ -79,6 +81,12 @@ function createChatHeaderState(
         agentId: "main",
         providers: authProfilesProviders,
       };
+    }
+    if (method === "auth.profiles.set") {
+      if (failAuthProfilesSet) {
+        throw new Error("save failed");
+      }
+      return { ok: true };
     }
     throw new Error(`Unexpected request: ${method}`);
   });
@@ -765,6 +773,73 @@ describe("chat view", () => {
     expect(apiKeyInput).not.toBeNull();
     expect(applyButton).not.toBeUndefined();
     expect(container.textContent).toContain("anthropic/claude-opus-4-6");
+  });
+
+  it("still switches the model when API key save fails", async () => {
+    const { state, request } = createChatHeaderState({
+      model: "gpt-5",
+      models: [
+        { id: "gpt-5", name: "GPT-5", provider: "openai" },
+        { id: "deepseek/deepseek-chat", name: "DeepSeek Chat", provider: "deepseek" },
+      ],
+      authProfilesProviders: [
+        {
+          provider: "openai",
+          label: "OpenAI",
+          configured: true,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["gpt-5"],
+        },
+        {
+          provider: "deepseek",
+          label: "DeepSeek",
+          configured: false,
+          canDelete: false,
+          source: "none",
+          modelCount: 1,
+          sampleModels: ["deepseek/deepseek-chat"],
+        },
+      ],
+      failAuthProfilesSet: true,
+    });
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
+    expect(modelSelect).not.toBeNull();
+
+    modelSelect!.value = "deepseek/deepseek-chat";
+    modelSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushTasks();
+    render(renderChatSessionSelect(state), container);
+
+    const apiKeyInput = container.querySelector<HTMLInputElement>(
+      ".chat-controls__api-key-inline-input",
+    );
+    expect(apiKeyInput).not.toBeNull();
+    apiKeyInput!.value = "test-key";
+    apiKeyInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushTasks();
+
+    const applyButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent?.trim() === "确定",
+    );
+    expect(applyButton).not.toBeUndefined();
+    applyButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushTasks();
+
+    expect(request).toHaveBeenCalledWith("auth.profiles.set", {
+      provider: "deepseek",
+      apiKey: "test-key",
+    });
+    expect(request).toHaveBeenCalledWith("sessions.patch", {
+      key: "main",
+      model: "deepseek/deepseek-chat",
+    });
   });
 
   it("disables the chat header model picker while a run is active", () => {

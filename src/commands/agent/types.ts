@@ -37,6 +37,8 @@ export type AgentCommandOpts = {
   images?: ImageContent[];
   /** Optional client-provided tools (OpenResponses hosted tools). */
   clientTools?: ClientToolDefinition[];
+  /** Disable built-in tools for this run. */
+  disableTools?: boolean;
   /** Agent id override (must exist in config). */
   agentId?: string;
   to?: string;
