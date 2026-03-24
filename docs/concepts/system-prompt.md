@@ -71,7 +71,7 @@ compaction.
 > do not count against the context window unless the model explicitly reads them.
 
 Large files are truncated with a marker. The max per-file size is controlled by
-`agents.defaults.bootstrapMaxChars` (default: 20000). Total injected bootstrap
+`agents.defaults.bootstrapMaxChars` (default: 4000). Total injected bootstrap
 content across files is capped by `agents.defaults.bootstrapTotalMaxChars`
 (default: 150000). Missing files inject a short missing-file marker. When truncation
 occurs, PansClaw can inject a warning block in Project Context; control this with

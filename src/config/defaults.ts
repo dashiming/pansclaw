@@ -512,7 +512,16 @@ export function applyCompactionDefaults(cfg: OpenClawConfig): OpenClawConfig {
     return cfg;
   }
   const compaction = defaults?.compaction;
-  if (compaction?.mode) {
+  const hasMode = typeof compaction?.mode === "string";
+  const hasKeepRecentTokens =
+    typeof compaction?.keepRecentTokens === "number" &&
+    Number.isFinite(compaction.keepRecentTokens) &&
+    compaction.keepRecentTokens > 0;
+  const hasMaxHistoryShare =
+    typeof compaction?.maxHistoryShare === "number" &&
+    Number.isFinite(compaction.maxHistoryShare) &&
+    compaction.maxHistoryShare > 0;
+  if (hasMode && hasKeepRecentTokens && hasMaxHistoryShare) {
     return cfg;
   }
 
@@ -524,7 +533,9 @@ export function applyCompactionDefaults(cfg: OpenClawConfig): OpenClawConfig {
         ...defaults,
         compaction: {
           ...compaction,
-          mode: "safeguard",
+          mode: compaction?.mode ?? "safeguard",
+          keepRecentTokens: compaction?.keepRecentTokens ?? 4_096,
+          maxHistoryShare: compaction?.maxHistoryShare ?? 0.2,
         },
       },
     },

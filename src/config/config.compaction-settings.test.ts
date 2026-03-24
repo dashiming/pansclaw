@@ -33,7 +33,8 @@ describe("config compaction settings", () => {
         expect(cfg.agents?.defaults?.compaction?.reserveTokensFloor).toBe(12_345);
         expect(cfg.agents?.defaults?.compaction?.mode).toBe("safeguard");
         expect(cfg.agents?.defaults?.compaction?.reserveTokens).toBeUndefined();
-        expect(cfg.agents?.defaults?.compaction?.keepRecentTokens).toBeUndefined();
+        expect(cfg.agents?.defaults?.compaction?.keepRecentTokens).toBe(4_096);
+        expect(cfg.agents?.defaults?.compaction?.maxHistoryShare).toBe(0.2);
         expect(cfg.agents?.defaults?.compaction?.identifierPolicy).toBe("custom");
         expect(cfg.agents?.defaults?.compaction?.identifierInstructions).toBe(
           "Keep ticket IDs unchanged.",
@@ -66,6 +67,7 @@ describe("config compaction settings", () => {
         const cfg = loadConfig();
         expect(cfg.agents?.defaults?.compaction?.reserveTokens).toBe(15_000);
         expect(cfg.agents?.defaults?.compaction?.keepRecentTokens).toBe(12_000);
+        expect(cfg.agents?.defaults?.compaction?.maxHistoryShare).toBe(0.2);
       },
     );
   });
@@ -85,6 +87,8 @@ describe("config compaction settings", () => {
         const cfg = loadConfig();
 
         expect(cfg.agents?.defaults?.compaction?.mode).toBe("safeguard");
+        expect(cfg.agents?.defaults?.compaction?.keepRecentTokens).toBe(4_096);
+        expect(cfg.agents?.defaults?.compaction?.maxHistoryShare).toBe(0.2);
         expect(cfg.agents?.defaults?.compaction?.reserveTokensFloor).toBe(9000);
       },
     );

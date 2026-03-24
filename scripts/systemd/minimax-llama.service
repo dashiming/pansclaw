@@ -1,0 +1,19 @@
+[Unit]
+Description=MiniMax-M2.5 llama-server (DGX)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/dashi/llama.cpp/build/bin/llama-server \
+    -m /home/dashi/models/minimax-m2.5/UD-Q3_K_XL/MiniMax-M2.5-UD-Q3_K_XL-00001-of-00004.gguf \
+    --alias MiniMax-M2.5 \
+    --ctx-size 32768 \
+    --port 8000 \
+    -ngl 999
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/tmp/llama-server.log
+StandardError=append:/tmp/llama-server.log
+
+[Install]
+WantedBy=default.target

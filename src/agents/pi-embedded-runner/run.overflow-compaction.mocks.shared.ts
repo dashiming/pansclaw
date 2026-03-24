@@ -63,6 +63,11 @@ export const mockedEnsureRuntimePluginsLoaded: (...args: unknown[]) => void = vi
 
 vi.mock("../../plugins/hook-runner-global.js", () => ({
   getGlobalHookRunner: vi.fn(() => mockedGlobalHookRunner),
+  initializeGlobalHookRunner: vi.fn(),
+}));
+
+vi.mock("../../plugins/provider-runtime.js", () => ({
+  prepareProviderRuntimeAuth: vi.fn(async (_params: unknown) => undefined),
 }));
 
 vi.mock("../../context-engine/index.js", () => ({
@@ -156,9 +161,23 @@ vi.mock("./model.js", () => ({
     },
     modelRegistry: {},
   })),
+  resolveModelAsync: vi.fn(async () => ({
+    model: {
+      id: "test-model",
+      provider: "anthropic",
+      contextWindow: 200000,
+      api: "messages",
+    },
+    error: null,
+    authStorage: {
+      setRuntimeApiKey: vi.fn(),
+    },
+    modelRegistry: {},
+  })),
 }));
 
 vi.mock("../model-auth.js", () => ({
+  applyLocalNoAuthHeaderOverride: vi.fn((model: unknown) => model),
   ensureAuthProfileStore: vi.fn(() => ({})),
   getApiKeyForModel: vi.fn(async () => ({
     apiKey: "test-key",

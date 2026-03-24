@@ -90,3 +90,6 @@ curl http://127.0.0.1:8000/v1/models
 ```
 
 - If requests fail with auth errors, set a real `VLLM_API_KEY` that matches your server configuration, or configure the provider explicitly under `models.providers.vllm`.
+- If requests intermittently fail with `503 Loading model`, the upstream local server is still warming or has restarted. Large `llama.cpp` loads can take minutes before `/v1/chat/completions` becomes ready.
+- Keep your local server's context window aligned with the model's actual usable window. Oversized `--ctx-size` values raise VRAM pressure and can trigger OOM restarts that surface in PansClaw as repeated `503 Loading model`.
+- For DGX + `llama-server` deployments, start from [scripts/systemd/minimax-llama.service](scripts/systemd/minimax-llama.service) and adapt the model path, user, and GPU flags.

@@ -225,6 +225,7 @@ openclaw pairing approve <channel> <code>
 - 支持以 `MiniMax-M2.5` 作为默认模型运行长流程任务。
 - 推荐通过 macOS launchd 常驻 SSH 隧道保证 `host.docker.internal:18080 -> DGX:8000` 自动恢复。
 - 对长会话增加超时与上下文压缩防护配置，降低 `503 Loading model`、`context size exceeded`、`run timeout` 对流程完成率的影响。
+- 对 embedded agent 增加 overflow 失败后的自动 session 轮转重试，避免单个超长会话卡死后需要人工清理历史。
 
 | 提供商                                                   | 验证方式                         |
 | -------------------------------------------------------- | -------------------------------- |

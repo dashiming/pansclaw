@@ -1,4 +1,7 @@
 import "./run.overflow-compaction.mocks.shared.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isCompactionFailureError, isLikelyContextOverflowError } from "../pi-embedded-helpers.js";
 
@@ -123,7 +126,9 @@ describe("overflow compaction in run loop", () => {
   it("returns error if compaction fails", async () => {
     const overflowError = makeOverflowError();
 
-    mockedRunEmbeddedAttempt.mockResolvedValue(makeAttemptResult({ promptError: overflowError }));
+    mockedRunEmbeddedAttempt
+      .mockResolvedValueOnce(makeAttemptResult({ promptError: overflowError }))
+      .mockResolvedValueOnce(makeAttemptResult({ promptError: null }));
 
     mockedCompactDirect.mockResolvedValueOnce({
       ok: false,
@@ -134,10 +139,12 @@ describe("overflow compaction in run loop", () => {
     const result = await runEmbeddedPiAgent(baseParams);
 
     expect(mockedCompactDirect).toHaveBeenCalledTimes(1);
-    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(1);
-    expect(result.meta.error?.kind).toBe("context_overflow");
-    expect(result.payloads?.[0]?.isError).toBe(true);
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(2);
+    expect(result.meta.error).toBeUndefined();
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("auto-compaction failed"));
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("rotated session transcript and retrying once with a fresh session"),
+    );
   });
 
   it("falls back to tool-result truncation and retries when oversized results are detected", async () => {
@@ -172,8 +179,9 @@ describe("overflow compaction in run loop", () => {
   it("retries compaction up to 3 times before giving up", async () => {
     const overflowError = makeOverflowError();
 
-    // 4 overflow errors: 3 compaction retries + final failure
+    // 5 attempts: 3 compaction retries + session reset + final overflow → error
     mockedRunEmbeddedAttempt
+      .mockResolvedValueOnce(makeAttemptResult({ promptError: overflowError }))
       .mockResolvedValueOnce(makeAttemptResult({ promptError: overflowError }))
       .mockResolvedValueOnce(makeAttemptResult({ promptError: overflowError }))
       .mockResolvedValueOnce(makeAttemptResult({ promptError: overflowError }))
@@ -204,12 +212,40 @@ describe("overflow compaction in run loop", () => {
 
     const result = await runEmbeddedPiAgent(baseParams);
 
-    // Compaction attempted 3 times (max)
-    expect(mockedCompactDirect).toHaveBeenCalledTimes(3);
-    // 4 attempts: 3 overflow+compact+retry cycles + final overflow → error
-    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(4);
+    // After one transcript reset, the fresh session can attempt compaction again once.
+    expect(mockedCompactDirect).toHaveBeenCalledTimes(4);
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(5);
     expect(result.meta.error?.kind).toBe("context_overflow");
     expect(result.payloads?.[0]?.isError).toBe(true);
+  });
+
+  it("recreates the session file before retrying an exhausted overflow run", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-overflow-reset-"));
+    const sessionFile = path.join(tempDir, "session.jsonl");
+    fs.writeFileSync(sessionFile, '{"type":"session","id":"test-session"}\n', "utf8");
+
+    try {
+      mockedRunEmbeddedAttempt
+        .mockResolvedValueOnce(makeAttemptResult({ promptError: makeOverflowError() }))
+        .mockResolvedValueOnce(makeAttemptResult({ promptError: null }));
+
+      mockedCompactDirect.mockResolvedValueOnce({
+        ok: false,
+        compacted: false,
+        reason: "nothing to compact",
+      });
+
+      const result = await runEmbeddedPiAgent({
+        ...baseParams,
+        sessionFile,
+        workspaceDir: tempDir,
+      });
+
+      expect(result.meta.error).toBeUndefined();
+      expect(fs.existsSync(sessionFile)).toBe(true);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("succeeds after second compaction attempt", async () => {
@@ -243,20 +279,20 @@ describe("overflow compaction in run loop", () => {
     expect(result.meta.error).toBeUndefined();
   });
 
-  it("does not attempt compaction for compaction_failure errors", async () => {
+  it("resets the session and retries once for compaction_failure errors", async () => {
     const compactionFailureError = new Error(
       "request_too_large: summarization failed - Request size exceeds model context window",
     );
 
-    mockedRunEmbeddedAttempt.mockResolvedValue(
-      makeAttemptResult({ promptError: compactionFailureError }),
-    );
+    mockedRunEmbeddedAttempt
+      .mockResolvedValueOnce(makeAttemptResult({ promptError: compactionFailureError }))
+      .mockResolvedValueOnce(makeAttemptResult({ promptError: null }));
 
     const result = await runEmbeddedPiAgent(baseParams);
 
     expect(mockedCompactDirect).not.toHaveBeenCalled();
-    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(1);
-    expect(result.meta.error?.kind).toBe("compaction_failure");
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(2);
+    expect(result.meta.error).toBeUndefined();
   });
 
   it("retries after successful compaction on assistant context overflow errors", async () => {

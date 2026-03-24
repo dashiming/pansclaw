@@ -62,6 +62,7 @@ import {
   pickFallbackThinkingLevel,
   type FailoverReason,
 } from "../pi-embedded-helpers.js";
+import { ensureSessionHeader } from "../pi-embedded-helpers/bootstrap.js";
 import { ensureRuntimePluginsLoaded } from "../runtime-plugins.js";
 import { derivePromptTokens, normalizeUsage, type UsageLike } from "../usage.js";
 import { redactRunIdentifier, resolveRunWorkspaceDir } from "../workspace-run.js";
@@ -825,6 +826,7 @@ export async function runEmbeddedPiAgent(
       let autoCompactionCount = 0;
       let runLoopIterations = 0;
       let overloadFailoverAttempts = 0;
+      let overflowSessionResetAttempted = false;
       const maybeMarkAuthProfileFailure = async (failure: {
         profileId?: string;
         reason?: AuthProfileFailureReason | null;
@@ -878,6 +880,42 @@ export async function runEmbeddedPiAgent(
       // repeated initialization/connection overhead per attempt.
       ensureContextEnginesInitialized();
       const contextEngine = await resolveContextEngine(params.config);
+      const resetSessionAfterOverflow = async (reason: string): Promise<boolean> => {
+        if (overflowSessionResetAttempted) {
+          return false;
+        }
+        overflowSessionResetAttempted = true;
+        const rotatedPath = `${params.sessionFile}.reset.${new Date().toISOString().replace(/[:.]/g, "-")}`;
+        try {
+          await fs.rename(params.sessionFile, rotatedPath);
+        } catch (err) {
+          const code = (err as { code?: string } | undefined)?.code;
+          if (code !== "ENOENT") {
+            log.warn(
+              `failed to rotate embedded session after overflow for ${provider}/${modelId}: ${String(err)}`,
+            );
+            return false;
+          }
+        }
+        try {
+          await ensureSessionHeader({
+            sessionFile: params.sessionFile,
+            sessionId: params.sessionId,
+            cwd: resolvedWorkspace,
+          });
+        } catch (err) {
+          log.warn(
+            `failed to recreate embedded session header after overflow for ${provider}/${modelId}: ${String(err)}`,
+          );
+          return false;
+        }
+        overflowCompactionAttempts = 0;
+        toolResultTruncationAttempted = false;
+        log.warn(
+          `context overflow recovery exhausted for ${provider}/${modelId}; rotated session transcript and retrying once with a fresh session (${reason})`,
+        );
+        return true;
+      };
       try {
         let authRetryPending = false;
         // Hoisted so the retry-limit error path can use the most recent API total.
@@ -1263,6 +1301,9 @@ export async function runEmbeddedPiAgent(
                   `isCompactionFailure=${isCompactionFailure} hasOversizedToolResults=unknown ` +
                   `attempt=${overflowCompactionAttempts} maxAttempts=${MAX_OVERFLOW_COMPACTION_ATTEMPTS}`,
               );
+            }
+            if (await resetSessionAfterOverflow(errorText)) {
+              continue;
             }
             const kind = isCompactionFailure ? "compaction_failure" : "context_overflow";
             return {

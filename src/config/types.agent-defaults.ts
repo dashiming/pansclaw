@@ -136,9 +136,9 @@ export type AgentDefaultsConfig = {
   repoRoot?: string;
   /** Skip bootstrap (BOOTSTRAP.md creation, etc.) for pre-configured deployments. */
   skipBootstrap?: boolean;
-  /** Max chars for injected bootstrap files before truncation (default: 20000). */
+  /** Max chars for injected bootstrap files before truncation (default: 4000). */
   bootstrapMaxChars?: number;
-  /** Max total chars across all injected bootstrap files (default: 150000). */
+  /** Max total chars across all injected bootstrap files (default: 12000). */
   bootstrapTotalMaxChars?: number;
   /**
    * Agent-visible bootstrap truncation warning mode:
@@ -206,6 +206,7 @@ export type AgentDefaultsConfig = {
   blockStreamingCoalesce?: BlockStreamingCoalesceConfig;
   /** Human-like delay between block replies. */
   humanDelay?: HumanDelayConfig;
+  /** Default agent runtime timeout in seconds (default: 1800). */
   timeoutSeconds?: number;
   /** Max inbound media size in MB for agent-visible attachments (text note or future image attach). */
   mediaMaxMb?: number;
@@ -312,7 +313,7 @@ export type AgentCompactionConfig = {
   keepRecentTokens?: number;
   /** Minimum reserve tokens enforced for Pi compaction (0 disables the floor). */
   reserveTokensFloor?: number;
-  /** Max share of context window for history during safeguard pruning (0.1–0.9, default 0.5). */
+  /** Max share of context window for history during safeguard pruning (0.1–0.9, default 0.2). */
   maxHistoryShare?: number;
   /** Additional compaction-summary instructions that can preserve language or persona continuity. */
   customInstructions?: string;
