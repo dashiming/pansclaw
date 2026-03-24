@@ -2,6 +2,11 @@ import { html, nothing } from "lit";
 import type { AuthProfilesState } from "../controllers/auth-profiles.ts";
 import type { ConfigState } from "../controllers/config.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
+import {
+  buildChatModelOptions,
+  groupChatModelOptions,
+  PROVIDER_DISPLAY_LABELS,
+} from "../model-catalog.ts";
 import type { ModelCatalogEntry } from "../types.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -38,9 +43,9 @@ export type ProviderSetupProps = ProviderSetupState &
     chatModelsLoading: boolean;
     onRefreshModels: () => void;
     onModelSelect: (model: string) => void;
-    onSaveModel: () => void;
+    onSaveModel: () => void | Promise<void>;
     onDraftChange: (provider: string, value: string) => void;
-    onSaveProviderKey: (provider: string) => void;
+    onSaveProviderKey: (provider: string) => void | Promise<void>;
     onLoadEnvFile: () => void;
     onEnvDraftChange: (key: string, value: string) => void;
     onSaveEnvFile: (updates: Record<string, string>) => void;
@@ -79,7 +84,7 @@ const KNOWN_PROVIDERS: ProviderInfo[] = [
     docsUrl: "https://www.minimaxi.com/",
   },
   {
-    id: "gemini",
+    id: "google",
     label: "Google Gemini",
     envKey: "GEMINI_API_KEY",
     placeholder: "AIza...",
@@ -145,11 +150,185 @@ export function renderProviderSetup(props: ProviderSetupProps) {
 function renderModelCard(props: ProviderSetupProps) {
   const currentModel = resolveCurrentPrimaryModel(props.configSnapshot);
   const selected = props.modelSetupSelectedModel || currentModel;
-  const grouped = groupModelsByProvider(props.chatModelCatalog);
-  const busy = props.modelSetupModelSaving;
+  const options = buildChatModelOptions(props.chatModelCatalog, selected, currentModel);
+  const grouped = groupChatModelOptions(options);
+  const selectedOption = options.find((entry) => entry.value === selected) ?? null;
+  const selectedProvider = selectedOption?.provider ?? "";
+  const selectedProviderInfo =
+    KNOWN_PROVIDERS.find((entry) => entry.id === selectedProvider) ?? null;
+  const providerDraft = selectedProvider ? (props.authProfilesDrafts[selectedProvider] ?? "") : "";
+  const providerStatus = selectedProvider
+    ? resolveConfiguredStatus(selectedProvider, props.authProfilesResult)
+    : { configured: false, label: "Not configured" };
+  const busy =
+    props.modelSetupModelSaving ||
+    (selectedProvider ? props.authProfilesSavingProvider === selectedProvider : false);
+  const needsApiKey = Boolean(selectedProviderInfo) && !providerStatus.configured;
+  const canConfirm =
+    Boolean(selected) &&
+    props.connected &&
+    !busy &&
+    (!needsApiKey || providerDraft.trim().length > 0) &&
+    (selected !== currentModel || providerDraft.trim().length > 0);
+
+  const handleConfirm = async () => {
+    if (!canConfirm) {
+      return;
+    }
+    if (needsApiKey && selectedProvider && providerDraft.trim()) {
+      await props.onSaveProviderKey(selectedProvider);
+    }
+    await props.onSaveModel();
+  };
+
+  const handleFocus = (e: FocusEvent) => {
+    const input = e.target as HTMLInputElement;
+    const wrap = input.closest<HTMLElement>(".provider-model-search");
+    if (!wrap) {
+      return;
+    }
+    input.dataset.prevPlaceholder = input.placeholder;
+    input.placeholder = "Search model...";
+    input.value = "";
+    const dropdown = wrap.querySelector<HTMLElement>(".provider-model-search__dd");
+    if (dropdown) {
+      dropdown.style.display = "block";
+    }
+  };
+
+  const handleInput = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const query = input.value.toLowerCase();
+    const wrap = input.closest<HTMLElement>(".provider-model-search");
+    if (!wrap) {
+      return;
+    }
+    wrap.querySelectorAll<HTMLElement>(".provider-model-search__item").forEach((entry) => {
+      const visible =
+        !query ||
+        (entry.dataset.value ?? "").toLowerCase().includes(query) ||
+        (entry.textContent ?? "").toLowerCase().includes(query);
+      entry.style.display = visible ? "" : "none";
+    });
+    wrap.querySelectorAll<HTMLElement>(".provider-model-search__group").forEach((group) => {
+      let sibling = group.nextElementSibling as HTMLElement | null;
+      let visible = false;
+      while (sibling && !sibling.classList.contains("provider-model-search__group")) {
+        if (sibling.style.display !== "none") {
+          visible = true;
+        }
+        sibling = sibling.nextElementSibling as HTMLElement | null;
+      }
+      group.style.display = visible ? "" : "none";
+    });
+  };
+
+  const handleBlur = (e: FocusEvent) => {
+    const input = e.target as HTMLInputElement;
+    const wrap = input.closest<HTMLElement>(".provider-model-search");
+    if (!wrap) {
+      return;
+    }
+    setTimeout(() => {
+      if (wrap.contains(document.activeElement)) {
+        return;
+      }
+      const dropdown = wrap.querySelector<HTMLElement>(".provider-model-search__dd");
+      if (dropdown) {
+        dropdown.style.display = "none";
+      }
+      input.value = "";
+      input.placeholder = input.dataset.prevPlaceholder ?? "Search model...";
+    }, 180);
+  };
+
+  const pickModel = (e: MouseEvent, model: string) => {
+    e.preventDefault();
+    props.onModelSelect(model);
+    const wrap = (e.currentTarget as HTMLElement).closest<HTMLElement>(".provider-model-search");
+    const dropdown = wrap?.querySelector<HTMLElement>(".provider-model-search__dd");
+    const input = wrap?.querySelector<HTMLInputElement>("input");
+    if (dropdown) {
+      dropdown.style.display = "none";
+    }
+    if (input) {
+      input.value = "";
+    }
+  };
 
   return html`
     <section class="card" style="margin-bottom: 20px;">
+      <style>
+        .provider-model-toolbar {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          flex-wrap: nowrap;
+          margin-top: 18px;
+        }
+
+        .provider-model-search {
+          position: relative;
+          flex: 1 1 320px;
+          min-width: 260px;
+        }
+
+        .provider-model-search__input,
+        .provider-model-key-input {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+          border-radius: 10px;
+          background: var(--bg-input, rgba(15, 23, 42, 0.6));
+          color: var(--color-text, #e5e7eb);
+        }
+
+        .provider-model-search__dd {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          max-height: 320px;
+          overflow-y: auto;
+          background: var(--bg-panel, #111827);
+          border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+          border-radius: 10px;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+          z-index: 30;
+          padding: 6px 0;
+        }
+
+        .provider-model-search__group {
+          padding: 8px 12px 4px;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--color-text-secondary, #94a3b8);
+          font-weight: 700;
+        }
+
+        .provider-model-search__item {
+          padding: 8px 12px;
+          cursor: pointer;
+          color: var(--color-text, #e5e7eb);
+        }
+
+        .provider-model-search__item:hover,
+        .provider-model-search__item--selected {
+          background: rgba(255, 255, 255, 0.06);
+        }
+
+        .provider-model-key-wrap {
+          flex: 1 1 260px;
+          min-width: 220px;
+        }
+
+        @media (max-width: 960px) {
+          .provider-model-toolbar {
+            flex-wrap: wrap;
+          }
+        }
+      </style>
       <div class="row" style="justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
         <div>
           <div class="card-title">Default AI Model</div>
@@ -164,38 +343,79 @@ function renderModelCard(props: ProviderSetupProps) {
         </button>
       </div>
 
-      <div style="margin-top: 18px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
-        <label class="field" style="flex: 1; min-width: 240px;">
-          <span>Model</span>
-          <select
-            .value=${selected}
+      <div class="provider-model-toolbar">
+        <div class="provider-model-search">
+          <input
+            class="provider-model-search__input"
+            type="text"
+            placeholder=${selectedOption?.displayName || currentModel || "Search model..."}
             ?disabled=${busy || !props.connected || props.chatModelsLoading}
-            @change=${(e: Event) => props.onModelSelect((e.target as HTMLSelectElement).value)}
-          >
+            autocomplete="off"
+            spellcheck="false"
+            @focus=${handleFocus}
+            @input=${handleInput}
+            @blur=${handleBlur}
+          />
+          <div class="provider-model-search__dd" style="display:none;">
             ${
-              currentModel && !props.chatModelCatalog.find((m) => m.id === currentModel)
-                ? html`<option value=${currentModel}>${currentModel} (current)</option>`
+              currentModel
+                ? html`
+                  <div
+                    class="provider-model-search__item ${selected === currentModel ? "provider-model-search__item--selected" : ""}"
+                    data-value=${currentModel}
+                    @mousedown=${(e: MouseEvent) => pickModel(e, currentModel)}
+                  >
+                    ${currentModel} (current)
+                  </div>
+                `
                 : nothing
             }
-            ${grouped.map(
-              ([providerLabel, models]) => html`
-                <optgroup label=${providerLabel}>
-                  ${models.map(
-                    (m) =>
-                      html`<option value=${m.id} ?selected=${m.id === selected}>${m.name}</option>`,
-                  )}
-                </optgroup>
+            ${[...grouped.entries()].map(
+              ([provider, models]) => html`
+                <div class="provider-model-search__group">
+                  ${PROVIDER_DISPLAY_LABELS[provider] ?? provider}
+                </div>
+                ${models.map(
+                  (model) => html`
+                    <div
+                      class="provider-model-search__item ${selected === model.value ? "provider-model-search__item--selected" : ""}"
+                      data-value=${model.value}
+                      @mousedown=${(e: MouseEvent) => pickModel(e, model.value)}
+                    >
+                      ${model.displayName}
+                    </div>
+                  `,
+                )}
               `,
             )}
-          </select>
-        </label>
+          </div>
+        </div>
+        <div class="provider-model-key-wrap">
+          <input
+            class="provider-model-key-input"
+            type="password"
+            autocomplete="off"
+            .value=${providerDraft}
+            placeholder=${
+              selectedProviderInfo
+                ? `Enter ${selectedProviderInfo.label} API key`
+                : "API key (if needed)"
+            }
+            ?disabled=${busy || !props.connected || !selectedProviderInfo}
+            @input=${(e: Event) =>
+              selectedProvider
+                ? props.onDraftChange(selectedProvider, (e.target as HTMLInputElement).value)
+                : null}
+          />
+        </div>
         <button
           class="btn primary"
-          style="margin-bottom: 2px;"
-          ?disabled=${busy || !props.connected || !selected || selected === currentModel}
-          @click=${props.onSaveModel}
+          ?disabled=${!canConfirm}
+          @click=${() => {
+            void handleConfirm();
+          }}
         >
-          ${busy ? "Saving…" : "Set as default"}
+          ${busy ? "Saving…" : "Confirm"}
         </button>
       </div>
 
@@ -204,6 +424,18 @@ function renderModelCard(props: ProviderSetupProps) {
           ? html`<div class="muted" style="margin-top: 8px;">
             Current default: <code style="font-family: monospace;">${currentModel}</code>
           </div>`
+          : nothing
+      }
+
+      ${
+        selectedProviderInfo
+          ? html`<div class="muted" style="margin-top: 8px;">
+              ${
+                providerStatus.configured
+                  ? `${selectedProviderInfo.label} key is already configured.`
+                  : `Add ${selectedProviderInfo.label} API key, then confirm.`
+              }
+            </div>`
           : nothing
       }
 
@@ -223,16 +455,6 @@ function renderModelCard(props: ProviderSetupProps) {
       }
     </section>
   `;
-}
-
-function groupModelsByProvider(catalog: ModelCatalogEntry[]): [string, ModelCatalogEntry[]][] {
-  const map = new Map<string, ModelCatalogEntry[]>();
-  for (const m of catalog) {
-    const list = map.get(m.provider) ?? [];
-    list.push(m);
-    map.set(m.provider, list);
-  }
-  return [...map.entries()].toSorted(([a], [b]) => a.localeCompare(b));
 }
 
 function renderApiKeysCard(props: ProviderSetupProps) {

@@ -1,6 +1,6 @@
 # PansClaw — 产品文档
 
-> 版本参考：2026.3.13 及 Unreleased（截至 2026-03-16）
+> 版本参考：0.2.2（截至 2026-03-24）
 > 官方文档：https://docs.openclaw.ai · 官网：https://openclaw.ai
 
 ---
@@ -37,12 +37,12 @@
 
 ### 产品定位
 
-| 维度 | 描述 |
-|------|------|
-| 用户群 | 希望获得本地化、快速、常驻个人 AI 的个人用户 |
-| 核心价值 | 自托管、多渠道、可扩展、隐私安全 |
-| 开源协议 | MIT |
-| 语言/运行时 | TypeScript (ESM) / Node ≥22 |
+| 维度        | 描述                                         |
+| ----------- | -------------------------------------------- |
+| 用户群      | 希望获得本地化、快速、常驻个人 AI 的个人用户 |
+| 核心价值    | 自托管、多渠道、可扩展、隐私安全             |
+| 开源协议    | MIT                                          |
+| 语言/运行时 | TypeScript (ESM) / Node ≥22                  |
 
 ### 赞助商
 
@@ -77,14 +77,14 @@ OpenAI · Vercel · Blacksmith · Convex
 
 ### 关键组件
 
-| 组件 | 说明 |
-|------|------|
-| **Gateway** | 长驻服务进程，持有全部消息渠道连接，通过 WebSocket 对外提供控制平面 API |
-| **Pi Agent** | 内嵌推理运行时（基于 pi-mono），负责 LLM 调用、工具执行、流式输出 |
-| **Sessions Store** | 每个 Agent 独立的会话 JSONL 记录，位于 `~/.openclaw/agents/<agentId>/sessions/` |
-| **Nodes** | macOS/iOS/Android 设备以 `role:node` 接入 Gateway，暴露 camera/canvas/screen 等设备能力 |
-| **Canvas Host** | Gateway 内嵌 HTTP 服务，提供 Agent 可编辑的实时可视化工作区 |
-| **Control UI** | 浏览器端管理界面，通过 `openclaw dashboard` 打开 |
+| 组件               | 说明                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| **Gateway**        | 长驻服务进程，持有全部消息渠道连接，通过 WebSocket 对外提供控制平面 API                 |
+| **Pi Agent**       | 内嵌推理运行时（基于 pi-mono），负责 LLM 调用、工具执行、流式输出                       |
+| **Sessions Store** | 每个 Agent 独立的会话 JSONL 记录，位于 `~/.openclaw/agents/<agentId>/sessions/`         |
+| **Nodes**          | macOS/iOS/Android 设备以 `role:node` 接入 Gateway，暴露 camera/canvas/screen 等设备能力 |
+| **Canvas Host**    | Gateway 内嵌 HTTP 服务，提供 Agent 可编辑的实时可视化工作区                             |
+| **Control UI**     | 浏览器端管理界面，通过 `openclaw dashboard` 打开                                        |
 
 ### 通信协议
 
@@ -146,11 +146,11 @@ openclaw message send --target +1234567890 --message "Hello from PansClaw"
 
 ### 发布渠道
 
-| 渠道 | npm dist-tag | 说明 |
-|------|-------------|------|
-| stable | `latest` | 正式标签（`vYYYY.M.D`） |
-| beta | `beta` | 预发布标签（`vYYYY.M.D-beta.N`） |
-| dev | `dev` | main 分支最新（不定期发布） |
+| 渠道   | npm dist-tag | 说明                             |
+| ------ | ------------ | -------------------------------- |
+| stable | `latest`     | 正式标签（`vYYYY.M.D`）          |
+| beta   | `beta`       | 预发布标签（`vYYYY.M.D-beta.N`） |
+| dev    | `dev`        | main 分支最新（不定期发布）      |
 
 切换渠道：`openclaw update --channel stable|beta|dev`
 
@@ -160,30 +160,30 @@ openclaw message send --target +1234567890 --message "Hello from PansClaw"
 
 PansClaw 支持 **25+ 消息渠道**，以及内嵌 WebChat：
 
-| 渠道 | 底层库 | 备注 |
-|------|--------|------|
-| **WhatsApp** | Baileys（Web） | 扫码登录，多账号 |
-| **Telegram** | grammY | Bot token |
-| **Slack** | Bolt | Bot/Webhook |
-| **Discord** | discord.js | Bot token |
-| **Google Chat** | Chat API | Service account |
-| **Signal** | signal-cli | 需本地安装 signal-cli |
-| **BlueBubbles** | iMessage | 推荐 iMessage 接入方式 |
-| **iMessage（遗留）** | imsg | 仅 macOS |
-| **IRC** | — | — |
-| **Microsoft Teams** | — | — |
-| **Matrix** | — | — |
-| **Feishu（飞书）** | — | 卡片消息、流式渲染 |
-| **LINE** | — | — |
-| **Mattermost** | — | — |
-| **Nextcloud Talk** | — | — |
-| **Nostr** | — | — |
-| **Synology Chat** | — | — |
-| **Tlon** | — | — |
-| **Twitch** | — | — |
-| **Zalo** | — | — |
-| **Zalo Personal** | — | — |
-| **WebChat** | 内嵌 | 随 Gateway 启动 |
+| 渠道                 | 底层库         | 备注                   |
+| -------------------- | -------------- | ---------------------- |
+| **WhatsApp**         | Baileys（Web） | 扫码登录，多账号       |
+| **Telegram**         | grammY         | Bot token              |
+| **Slack**            | Bolt           | Bot/Webhook            |
+| **Discord**          | discord.js     | Bot token              |
+| **Google Chat**      | Chat API       | Service account        |
+| **Signal**           | signal-cli     | 需本地安装 signal-cli  |
+| **BlueBubbles**      | iMessage       | 推荐 iMessage 接入方式 |
+| **iMessage（遗留）** | imsg           | 仅 macOS               |
+| **IRC**              | —              | —                      |
+| **Microsoft Teams**  | —              | —                      |
+| **Matrix**           | —              | —                      |
+| **Feishu（飞书）**   | —              | 卡片消息、流式渲染     |
+| **LINE**             | —              | —                      |
+| **Mattermost**       | —              | —                      |
+| **Nextcloud Talk**   | —              | —                      |
+| **Nostr**            | —              | —                      |
+| **Synology Chat**    | —              | —                      |
+| **Tlon**             | —              | —                      |
+| **Twitch**           | —              | —                      |
+| **Zalo**             | —              | —                      |
+| **Zalo Personal**    | —              | —                      |
+| **WebChat**          | 内嵌           | 随 Gateway 启动        |
 
 ### DM 安全策略
 
@@ -219,35 +219,42 @@ openclaw pairing approve <channel> <code>
 
 ### 支持的模型提供商（内置 + 插件）
 
-| 提供商 | 验证方式 |
-|--------|---------|
-| **OpenAI** / GPT-5.x | API Key 或 OAuth（ChatGPT 订阅） |
-| **Anthropic** / Claude 4.x | API Key 或 `claude setup-token` |
-| **OpenAI Codex** | OAuth（Codex 订阅） |
-| **GitHub Copilot** | OAuth token exchange |
-| **OpenRouter** | API Key，支持透传任意模型 |
-| **Ollama** | 本地 HTTP |
-| **Z.AI / GLM** | API Key |
-| **MiniMax / Moonshot / Qianfan / BytePlus / VolcEngine** | API Key |
-| **Mistral / Together / Venice / vLLM / SGLang** | API Key / Local |
-| **NVIDIA / HuggingFace** | API Key |
-| **Cloudflare AI Gateway / Vercel AI Gateway** | 代理网关 |
-| **ModelStudio（阿里）** | API Key |
-| **Kimi Coding / OpenCode / Kilocode** | 插件 |
+### 0.2.2 本地推理增强（DGX MiniMax）
+
+- 支持将 `vllm` 提供商接入 DGX 上的 `llama-server`（OpenAI-compatible API）。
+- 支持以 `MiniMax-M2.5` 作为默认模型运行长流程任务。
+- 推荐通过 macOS launchd 常驻 SSH 隧道保证 `host.docker.internal:18080 -> DGX:8000` 自动恢复。
+- 对长会话增加超时与上下文压缩防护配置，降低 `503 Loading model`、`context size exceeded`、`run timeout` 对流程完成率的影响。
+
+| 提供商                                                   | 验证方式                         |
+| -------------------------------------------------------- | -------------------------------- |
+| **OpenAI** / GPT-5.x                                     | API Key 或 OAuth（ChatGPT 订阅） |
+| **Anthropic** / Claude 4.x                               | API Key 或 `claude setup-token`  |
+| **OpenAI Codex**                                         | OAuth（Codex 订阅）              |
+| **GitHub Copilot**                                       | OAuth token exchange             |
+| **OpenRouter**                                           | API Key，支持透传任意模型        |
+| **Ollama**                                               | 本地 HTTP                        |
+| **Z.AI / GLM**                                           | API Key                          |
+| **MiniMax / Moonshot / Qianfan / BytePlus / VolcEngine** | API Key                          |
+| **Mistral / Together / Venice / vLLM / SGLang**          | API Key / Local                  |
+| **NVIDIA / HuggingFace**                                 | API Key                          |
+| **Cloudflare AI Gateway / Vercel AI Gateway**            | 代理网关                         |
+| **ModelStudio（阿里）**                                  | API Key                          |
+| **Kimi Coding / OpenCode / Kilocode**                    | 插件                             |
 
 ### 配置示例
 
 ```json5
 // ~/.openclaw/openclaw.json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "openai/gpt-5",
-        "fallbacks": ["anthropic/claude-opus-4-6", "openrouter/auto"]
-      }
-    }
-  }
+  agents: {
+    defaults: {
+      model: {
+        primary: "openai/gpt-5",
+        fallbacks: ["anthropic/claude-opus-4-6", "openrouter/auto"],
+      },
+    },
+  },
 }
 ```
 
@@ -268,14 +275,14 @@ Agent 使用单一工作目录（`agents.defaults.workspace`，默认 `~/.opencl
 
 **引导文件**（启动时注入系统提示）：
 
-| 文件 | 用途 |
-|------|------|
-| `AGENTS.md` | 操作指令 + "记忆" |
-| `SOUL.md` | 人格、边界、语调 |
-| `TOOLS.md` | 工具使用笔记（用户维护） |
+| 文件           | 用途                       |
+| -------------- | -------------------------- |
+| `AGENTS.md`    | 操作指令 + "记忆"          |
+| `SOUL.md`      | 人格、边界、语调           |
+| `TOOLS.md`     | 工具使用笔记（用户维护）   |
 | `BOOTSTRAP.md` | 首次启动仪式（完成后删除） |
-| `IDENTITY.md` | 代理昵称/表情 |
-| `USER.md` | 用户档案 + 称呼偏好 |
+| `IDENTITY.md`  | 代理昵称/表情              |
+| `USER.md`      | 用户档案 + 称呼偏好        |
 
 空文件跳过注入；超大文件自动截断并附标记。
 
@@ -303,11 +310,11 @@ Agent 使用单一工作目录（`agents.defaults.workspace`，默认 `~/.opencl
 
 ### 会话 DM 隔离模式（`session.dmScope`）
 
-| 模式 | 说明 |
-|------|------|
-| `main`（默认） | 所有 DM 共享主会话（适合单用户）|
-| `per-peer` | 按发件人 ID 隔离 |
-| `per-channel-peer` | 按渠道 + 发件人隔离（推荐多用户） |
+| 模式                       | 说明                                     |
+| -------------------------- | ---------------------------------------- |
+| `main`（默认）             | 所有 DM 共享主会话（适合单用户）         |
+| `per-peer`                 | 按发件人 ID 隔离                         |
+| `per-channel-peer`         | 按渠道 + 发件人隔离（推荐多用户）        |
 | `per-account-channel-peer` | 按账号 + 渠道 + 发件人隔离（推荐多账号） |
 
 > **安全警告**：多用户场景强烈建议设 `dmScope: "per-channel-peer"`，防止上下文跨用户泄露。
@@ -336,6 +343,7 @@ openclaw browser --browser-profile openclaw snapshot
 ```
 
 三种内置 Profile：
+
 - `openclaw`：隔离的 Agent 专用浏览器
 - `user`：附加到已登录的真实 Chrome 会话
 - `chrome-relay`：通过 Chrome 扩展 relay 到系统浏览器
@@ -386,6 +394,7 @@ Gateway 内置 HTTP Webhook 接收器，可从外部系统触发 Agent 任务。
 技能是 AgentSkills 兼容的目录，包含 `SKILL.md` 文件，教 Agent 如何使用特定工具或遵守特定工作流。
 
 **加载优先级**（从高到低）：
+
 1. `<workspace>/skills/`（工作区技能）
 2. `~/.openclaw/skills/`（全局托管技能）
 3. 内置技能（随安装包发布）
@@ -429,6 +438,7 @@ agents:
 ```
 
 每个 Agent 拥有：
+
 - **独立工作区**（文件、AGENTS.md、会话）
 - **独立 agentDir**（auth profiles、model registry、per-agent config）
 - **独立会话存储**
@@ -472,14 +482,14 @@ openclaw setup --agent <agentId>
 
 ### 默认安全策略
 
-| 场景 | 默认行为 |
-|------|---------|
-| 陌生 DM | 配对（pairing）验证，未通过则不处理 |
-| 开放 DM | 需显式设置 `dmPolicy: "open"` + `allowFrom: ["*"]` |
-| 浏览器 SSRF | 私有网络访问需显式启用 `ssrfPolicy.dangerouslyAllowPrivateNetwork` |
-| Shell 执行 | 受 `tools.exec` 策略管控，可配置审批流 |
-| Webhook body | 认证前限制 body size + 超时 |
-| Subagents | 仅允许控制者会话发送指令给其创建的子 Agent |
+| 场景         | 默认行为                                                           |
+| ------------ | ------------------------------------------------------------------ |
+| 陌生 DM      | 配对（pairing）验证，未通过则不处理                                |
+| 开放 DM      | 需显式设置 `dmPolicy: "open"` + `allowFrom: ["*"]`                 |
+| 浏览器 SSRF  | 私有网络访问需显式启用 `ssrfPolicy.dangerouslyAllowPrivateNetwork` |
+| Shell 执行   | 受 `tools.exec` 策略管控，可配置审批流                             |
+| Webhook body | 认证前限制 body size + 超时                                        |
+| Subagents    | 仅允许控制者会话发送指令给其创建的子 Agent                         |
 
 ### 设备配对与信任
 
@@ -525,15 +535,15 @@ openclaw doctor --fix    # 自动修复已知迁移问题
 
 ### 部署平台
 
-| 平台 | 文档 |
-|------|------|
-| Raspberry Pi | `docs/platforms/raspberry-pi.md` |
-| Linux VPS | `docs/platforms/linux.md` |
-| Docker | `docker-compose.yml` + `docs/install/docker` |
-| DigitalOcean | `docs/platforms/digitalocean.md` |
-| Oracle Cloud | `docs/platforms/oracle.md` |
-| Fly.io | `fly.toml` |
-| Windows (WSL2) | `docs/platforms/windows.md` |
+| 平台           | 文档                                         |
+| -------------- | -------------------------------------------- |
+| Raspberry Pi   | `docs/platforms/raspberry-pi.md`             |
+| Linux VPS      | `docs/platforms/linux.md`                    |
+| Docker         | `docker-compose.yml` + `docs/install/docker` |
+| DigitalOcean   | `docs/platforms/digitalocean.md`             |
+| Oracle Cloud   | `docs/platforms/oracle.md`                   |
+| Fly.io         | `fly.toml`                                   |
+| Windows (WSL2) | `docs/platforms/windows.md`                  |
 
 ### Remote Gateway
 
@@ -555,15 +565,15 @@ OPENCLAW_TZ=Asia/Shanghai docker-compose up -d
 
 ### 技术栈
 
-| 层次 | 技术 |
-|------|------|
-| 语言 | TypeScript (ESM, strict) |
-| 运行时 | Node 22+（生产），Bun（开发/脚本） |
-| 包管理 | pnpm（主要），Bun（可选） |
-| 构建 | tsdown → `dist/` |
-| Lint/Format | Oxlint + Oxfmt |
-| 测试 | Vitest，V8 coverage（70% 阈值） |
-| CLI 框架 | Commander + @clack/prompts |
+| 层次        | 技术                               |
+| ----------- | ---------------------------------- |
+| 语言        | TypeScript (ESM, strict)           |
+| 运行时      | Node 22+（生产），Bun（开发/脚本） |
+| 包管理      | pnpm（主要），Bun（可选）          |
+| 构建        | tsdown → `dist/`                   |
+| Lint/Format | Oxlint + Oxfmt                     |
+| 测试        | Vitest，V8 coverage（70% 阈值）    |
+| CLI 框架    | Commander + @clack/prompts         |
 
 ### 目录结构
 
@@ -647,4 +657,4 @@ pnpm test:coverage
 
 ---
 
-*本文档由 GitHub Copilot 根据代码库自动分析生成，最后更新：2026-03-16。*
+_本文档由 GitHub Copilot 根据代码库自动分析生成，最后更新：2026-03-16。_

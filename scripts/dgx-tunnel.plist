@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  dgx-tunnel.plist
+  launchd agent — keeps the SSH local-forward tunnel to the DGX host alive.
+  Install with: scripts/install-dgx-tunnel.sh
+  Tunnel:  localhost:18080  →  dgx-host:127.0.0.1:8000  (llama-server / MiniMax-M2.5)
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.pansclaw.dgx-tunnel</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/ssh</string>
+    <string>-N</string>
+    <string>-L</string>
+    <string>18080:127.0.0.1:8000</string>
+    <!-- Keepalive: send a null packet every 30 s; give up after 3 missed replies.
+         ExitOnForwardFailure lets launchd restart if the port is already bound. -->
+    <string>-o</string>
+    <string>ServerAliveInterval=30</string>
+    <string>-o</string>
+    <string>ServerAliveCountMax=3</string>
+    <string>-o</string>
+    <string>ExitOnForwardFailure=yes</string>
+    <string>-o</string>
+    <string>TCPKeepAlive=yes</string>
+    <string>dashi@100.82.102.7</string>
+  </array>
+
+  <!-- launchd restarts the process whenever it exits for any reason -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Wait 30 s before re-spawning to avoid rapid-retry loops -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/pansclaw-dgx-tunnel.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/pansclaw-dgx-tunnel.log</string>
+</dict>
+</plist>

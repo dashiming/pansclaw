@@ -2,6 +2,19 @@
 
 Docs: https://docs.openclaw.ai
 
+## 0.2.2
+
+### Changes
+
+- Models/vLLM: add first-class DGX MiniMax M2.5 routing via `vllm` with OpenAI-compatible endpoint support and default model wiring for local deployments.
+- Ops/macOS: add `scripts/dgx-tunnel.plist` and `scripts/install-dgx-tunnel.sh` so DGX SSH forwarding can run as a persistent launchd service with auto-reconnect.
+- UI/model setup: expand mainstream provider model catalog and keep model selection in dedicated settings flow while simplifying the chat header controls.
+
+### Fixes
+
+- Agent runtime: increase long-run resilience for large local models by extending default run timeout and compaction timeout budgets in deployment guidance.
+- Agent context stability: enable stricter context-pruning and compaction tuning guidance to reduce overflow failures on long sessions with MiniMax/vLLM backends.
+
 ## Unreleased
 
 ### Changes
