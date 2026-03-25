@@ -340,6 +340,36 @@ describe("chat view", () => {
     nowSpy.mockRestore();
   });
 
+  it("sends on Enter when only image attachments are present", () => {
+    const onSend = vi.fn();
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          draft: "",
+          attachments: [
+            {
+              id: "att-1",
+              dataUrl: "data:image/png;base64,aGVsbG8=",
+              mimeType: "image/png",
+            },
+          ],
+          onSend,
+        }),
+      ),
+      container,
+    );
+
+    const textarea = container.querySelector("textarea");
+    expect(textarea).not.toBeNull();
+    if (!textarea) {
+      return;
+    }
+
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
   it("renders fallback indicator shortly after fallback event", () => {
     const container = document.createElement("div");
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);

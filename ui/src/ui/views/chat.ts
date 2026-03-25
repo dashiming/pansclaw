@@ -1054,10 +1054,14 @@ export function renderChat(props: ChatProps) {
       }
       e.preventDefault();
       if (canCompose) {
-        if (props.draft.trim()) {
+        const hasDraft = props.draft.trim().length > 0;
+        const hasAttachmentsToSend = (props.attachments?.length ?? 0) > 0;
+        if (hasDraft) {
           inputHistory.push(props.draft);
         }
-        props.onSend();
+        if (hasDraft || hasAttachmentsToSend) {
+          props.onSend();
+        }
       }
     }
   };
