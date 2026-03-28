@@ -24,6 +24,7 @@ export type ProviderSetupState = EnvFileState & {
   connected: boolean;
   // model picker
   modelSetupSelectedModel: string;
+  modelSetupBaseUrlDrafts: Record<string, string>;
   modelSetupModelSaving: boolean;
   modelSetupModelMessage: { kind: "success" | "error"; text: string } | null;
   // per-provider key drafts (reuses authProfilesDrafts from AuthProfilesState)
@@ -43,6 +44,7 @@ export type ProviderSetupProps = ProviderSetupState &
     chatModelsLoading: boolean;
     onRefreshModels: () => void;
     onModelSelect: (model: string) => void;
+    onBaseUrlDraftChange: (provider: string, value: string) => void;
     onSaveModel: () => void | Promise<void>;
     onDraftChange: (provider: string, value: string) => void;
     onSaveProviderKey: (provider: string) => void | Promise<void>;
@@ -58,6 +60,8 @@ type ProviderInfo = {
   label: string;
   envKey: string;
   placeholder: string;
+  requiresBaseUrl?: boolean;
+  baseUrlPlaceholder?: string;
   docsUrl?: string;
 };
 
@@ -97,6 +101,15 @@ const KNOWN_PROVIDERS: ProviderInfo[] = [
     placeholder: "sk-or-...",
     docsUrl: "https://openrouter.ai/",
   },
+  {
+    id: "vllm",
+    label: "vLLM / DGX",
+    envKey: "VLLM_API_KEY",
+    placeholder: "vllm-local",
+    requiresBaseUrl: true,
+    baseUrlPlaceholder: "http://host.docker.internal:18080/v1",
+    docsUrl: "https://docs.openclaw.ai/providers/vllm",
+  },
 ];
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -135,6 +148,20 @@ function resolveConfiguredStatus(
   return { configured: false, label: "Not configured" };
 }
 
+function resolveCurrentProviderBaseUrl(
+  providerId: string,
+  snapshot: ConfigState["configSnapshot"],
+): string {
+  if (!providerId || !snapshot?.config) {
+    return "";
+  }
+  const cfg = snapshot.config;
+  const models = cfg.models as Record<string, unknown> | undefined;
+  const providers = models?.providers as Record<string, unknown> | undefined;
+  const provider = providers?.[providerId] as Record<string, unknown> | undefined;
+  return typeof provider?.baseUrl === "string" ? provider.baseUrl : "";
+}
+
 function inferProviderFromModelId(modelId: string): string {
   const trimmed = modelId.trim();
   if (!trimmed) {
@@ -169,6 +196,10 @@ function renderModelCard(props: ProviderSetupProps) {
     selectedOption?.provider?.trim().toLowerCase() ?? inferProviderFromModelId(selected);
   const selectedProviderInfo =
     KNOWN_PROVIDERS.find((entry) => entry.id === selectedProvider) ?? null;
+  const providerBaseUrl = selectedProvider
+    ? (props.modelSetupBaseUrlDrafts[selectedProvider] ??
+      resolveCurrentProviderBaseUrl(selectedProvider, props.configSnapshot))
+    : "";
   const providerDraft = selectedProvider ? (props.authProfilesDrafts[selectedProvider] ?? "") : "";
   const providerStatus = selectedProvider
     ? resolveConfiguredStatus(selectedProvider, props.authProfilesResult)
@@ -177,10 +208,12 @@ function renderModelCard(props: ProviderSetupProps) {
     props.modelSetupModelSaving ||
     (selectedProvider ? props.authProfilesSavingProvider === selectedProvider : false);
   const needsApiKey = Boolean(selectedProviderInfo) && !providerStatus.configured;
+  const needsBaseUrl = Boolean(selectedProviderInfo?.requiresBaseUrl) && !providerBaseUrl.trim();
   const canConfirm =
     Boolean(selected) &&
     props.connected &&
     !busy &&
+    !needsBaseUrl &&
     (!needsApiKey || providerDraft.trim().length > 0) &&
     (selected !== currentModel || providerDraft.trim().length > 0);
 
@@ -415,6 +448,28 @@ function renderModelCard(props: ProviderSetupProps) {
             @input=${(e: Event) => props.onModelSelect((e.target as HTMLInputElement).value)}
           />
         </div>
+        ${
+          selectedProviderInfo?.requiresBaseUrl
+            ? html`
+              <div class="provider-model-key-wrap">
+                <input
+                  class="provider-model-key-input"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  .value=${providerBaseUrl}
+                  placeholder=${selectedProviderInfo.baseUrlPlaceholder ?? "https://your-server/v1"}
+                  ?disabled=${busy || !props.connected}
+                  @input=${(e: Event) =>
+                    props.onBaseUrlDraftChange(
+                      selectedProvider,
+                      (e.target as HTMLInputElement).value,
+                    )}
+                />
+              </div>
+            `
+            : nothing
+        }
         <div class="provider-model-key-wrap">
           <input
             class="provider-model-key-input"
@@ -455,6 +510,16 @@ function renderModelCard(props: ProviderSetupProps) {
       <div class="muted" style="margin-top: 8px;">
         You can pick from the list or enter any custom model ID.
       </div>
+
+      ${
+        selectedProviderInfo?.requiresBaseUrl
+          ? html`
+              <div class="muted" style="margin-top: 8px">
+                Enter the remote OpenAI-compatible "/v1" endpoint for your DGX or self-hosted vLLM server.
+              </div>
+            `
+          : nothing
+      }
 
       ${
         selectedProviderInfo

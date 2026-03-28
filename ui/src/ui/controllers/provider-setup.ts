@@ -2,13 +2,17 @@ import type { GatewayBrowserClient } from "../gateway.ts";
 import { updateConfigFormValue } from "./config.ts";
 import { loadModels } from "./models.ts";
 
+const DEFAULT_REMOTE_MODEL_CONTEXT_WINDOW = 128_000;
+const DEFAULT_REMOTE_MODEL_MAX_TOKENS = 8_192;
+
 export type ProviderSetupState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
-  configSnapshot: { hash?: string | null } | null;
+  configSnapshot: { hash?: string | null; config?: Record<string, unknown> | null } | null;
   chatModelsLoading: boolean;
   chatModelCatalog: Array<{ id: string; name: string; provider: string }>;
   modelSetupSelectedModel: string;
+  modelSetupBaseUrlDrafts: Record<string, string>;
   modelSetupModelSaving: boolean;
   modelSetupModelMessage: { kind: "success" | "error"; text: string } | null;
   envFileAvailable: boolean | null;
@@ -24,6 +28,102 @@ function toErrorText(err: unknown) {
     return err.message;
   }
   return String(err);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function inferProviderFromModelId(modelId: string): string {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0) {
+    return "";
+  }
+  return trimmed.slice(0, slashIndex).toLowerCase();
+}
+
+function extractProviderModelId(modelRef: string, providerId: string): string {
+  const trimmed = modelRef.trim();
+  const prefix = `${providerId.trim().toLowerCase()}/`;
+  if (trimmed.toLowerCase().startsWith(prefix)) {
+    return trimmed.slice(prefix.length).trim();
+  }
+  return trimmed;
+}
+
+function normalizeBaseUrl(raw: string): string {
+  return raw.trim().replace(/\/+$/, "");
+}
+
+function validateHttpBaseUrl(raw: string): string | null {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "Use an http:// or https:// endpoint.";
+    }
+    return null;
+  } catch {
+    return "Enter a valid endpoint URL.";
+  }
+}
+
+function resolveConfigRoot(state: ProviderSetupState): Record<string, unknown> {
+  if (state.configForm) {
+    return state.configForm;
+  }
+  if (isRecord(state.configSnapshot?.config)) {
+    return state.configSnapshot.config;
+  }
+  return {};
+}
+
+function resolveProviderConfig(
+  state: ProviderSetupState,
+  providerId: string,
+): Record<string, unknown> | null {
+  if (!providerId) {
+    return null;
+  }
+  const root = resolveConfigRoot(state);
+  const models = isRecord(root.models) ? root.models : null;
+  const providers = models && isRecord(models.providers) ? models.providers : null;
+  const provider = providers ? providers[providerId] : null;
+  return isRecord(provider) ? provider : null;
+}
+
+function buildDefaultModelEntry(modelId: string) {
+  return {
+    id: modelId,
+    name: modelId,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: DEFAULT_REMOTE_MODEL_CONTEXT_WINDOW,
+    maxTokens: DEFAULT_REMOTE_MODEL_MAX_TOKENS,
+  };
+}
+
+function buildVllmProviderPatch(state: ProviderSetupState, modelRef: string, baseUrl: string) {
+  const providerId = "vllm";
+  const providerModelId = extractProviderModelId(modelRef, providerId);
+  const existingProvider = resolveProviderConfig(state, providerId);
+  const existingModels = Array.isArray(existingProvider?.models)
+    ? existingProvider.models.filter(isRecord)
+    : [];
+  const nextModels = existingModels.some((entry) => entry.id === providerModelId)
+    ? existingModels
+    : [...existingModels, buildDefaultModelEntry(providerModelId)];
+
+  return {
+    ...existingProvider,
+    baseUrl,
+    api: typeof existingProvider?.api === "string" ? existingProvider.api : "openai-completions",
+    models: nextModels,
+  };
 }
 
 export async function refreshProviderSetupModels(state: ProviderSetupState) {
@@ -46,32 +146,84 @@ export function updateProviderSetupModelSelection(state: ProviderSetupState, mod
   state.modelSetupModelMessage = null;
 }
 
+export function updateProviderSetupBaseUrlDraft(
+  state: ProviderSetupState,
+  provider: string,
+  value: string,
+) {
+  state.modelSetupBaseUrlDrafts = { ...state.modelSetupBaseUrlDrafts, [provider]: value };
+  state.modelSetupModelMessage = null;
+}
+
 export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
   if (!state.client || !state.connected) {
     return;
   }
   const model = state.modelSetupSelectedModel.trim();
+  const providerId = inferProviderFromModelId(model);
   if (!model) {
     state.modelSetupModelMessage = { kind: "error", text: "Please select a model first." };
     return;
   }
+
+  let providerPatch: Record<string, unknown> | null = null;
+  if (providerId === "vllm") {
+    const existingProvider = resolveProviderConfig(state, providerId);
+    const currentBaseUrl =
+      typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
+    const nextBaseUrl = normalizeBaseUrl(
+      state.modelSetupBaseUrlDrafts[providerId]?.trim() || currentBaseUrl,
+    );
+    if (!nextBaseUrl) {
+      state.modelSetupModelMessage = {
+        kind: "error",
+        text: "Enter the remote DGX / vLLM endpoint before saving.",
+      };
+      return;
+    }
+    const baseUrlError = validateHttpBaseUrl(nextBaseUrl);
+    if (baseUrlError) {
+      state.modelSetupModelMessage = { kind: "error", text: baseUrlError };
+      return;
+    }
+    providerPatch = buildVllmProviderPatch(state, model, nextBaseUrl);
+  }
+
   state.modelSetupModelSaving = true;
   state.modelSetupModelMessage = null;
   try {
-    const patch = { agents: { defaults: { model: { primary: model } } } };
+    const patch: Record<string, unknown> = {
+      agents: { defaults: { model: { primary: model } } },
+    };
+    if (providerId && providerPatch) {
+      patch.models = { providers: { [providerId]: providerPatch } };
+    }
     const raw = JSON.stringify(patch);
     await state.client.request("config.patch", {
       raw,
       baseHash: state.configSnapshot?.hash ?? null,
     });
     if (state.configForm) {
+      if (providerId && providerPatch) {
+        updateConfigFormValue(
+          state as unknown as Parameters<typeof updateConfigFormValue>[0],
+          ["models", "providers", providerId],
+          providerPatch,
+        );
+      }
       updateConfigFormValue(
         state as unknown as Parameters<typeof updateConfigFormValue>[0],
         ["agents", "defaults", "model", "primary"],
         model,
       );
     }
-    state.modelSetupModelMessage = { kind: "success", text: "Default model updated." };
+    state.modelSetupModelMessage = {
+      kind: "success",
+      text:
+        providerId === "vllm"
+          ? "Default model and remote vLLM endpoint updated."
+          : "Default model updated.",
+    };
   } catch (err) {
     state.modelSetupModelMessage = {
       kind: "error",

@@ -80,6 +80,7 @@ import {
   saveEnvFile,
   saveProviderSetupDefaultModel,
   updateEnvFileDraft,
+  updateProviderSetupBaseUrlDraft,
   updateProviderSetupModelSelection,
 } from "./controllers/provider-setup.ts";
 import { deleteSessionAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
@@ -1826,6 +1827,7 @@ export function renderApp(state: AppViewState) {
                 chatModelCatalog: state.chatModelCatalog,
                 chatModelsLoading: state.chatModelsLoading,
                 modelSetupSelectedModel: state.modelSetupSelectedModel,
+                modelSetupBaseUrlDrafts: state.modelSetupBaseUrlDrafts,
                 modelSetupModelSaving: state.modelSetupModelSaving,
                 modelSetupModelMessage: state.modelSetupModelMessage,
                 authProfilesLoading: state.authProfilesLoading,
@@ -1840,6 +1842,8 @@ export function renderApp(state: AppViewState) {
                 envFileMessage: state.envFileMessage,
                 onRefreshModels: () => refreshProviderSetupModels(state),
                 onModelSelect: (model) => updateProviderSetupModelSelection(state, model),
+                onBaseUrlDraftChange: (provider, value) =>
+                  updateProviderSetupBaseUrlDraft(state, provider, value),
                 onSaveModel: () => saveProviderSetupDefaultModel(state),
                 onDraftChange: (provider, value) => updateAuthProfileDraft(state, provider, value),
                 onSaveProviderKey: (provider) => saveAuthProfile(state, provider),

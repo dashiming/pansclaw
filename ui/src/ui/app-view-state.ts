@@ -142,6 +142,7 @@ export type AppViewState = {
   aiAgentsActiveSection: string | null;
   aiAgentsActiveSubsection: string | null;
   modelSetupSelectedModel: string;
+  modelSetupBaseUrlDrafts: Record<string, string>;
   modelSetupModelSaving: boolean;
   modelSetupModelMessage: { kind: "success" | "error"; text: string } | null;
   envFileAvailable: boolean | null;

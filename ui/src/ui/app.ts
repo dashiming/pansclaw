@@ -236,6 +236,7 @@ export class PansClawApp extends LitElement {
   @state() aiAgentsActiveSection: string | null = null;
   @state() aiAgentsActiveSubsection: string | null = null;
   @state() modelSetupSelectedModel = "";
+  @state() modelSetupBaseUrlDrafts: Record<string, string> = {};
   @state() modelSetupModelSaving = false;
   @state() modelSetupModelMessage: { kind: "success" | "error"; text: string } | null = null;
   @state() envFileAvailable: boolean | null = null;
