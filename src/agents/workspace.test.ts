@@ -6,6 +6,7 @@ import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace
 import {
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_BOOTSTRAP_FILENAME,
+  DEFAULT_HEARTBEAT_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
   DEFAULT_MEMORY_ALT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
@@ -219,6 +220,45 @@ describe("loadWorkspaceBootstrapFiles", () => {
       expect(agents?.content).toBeUndefined();
     } finally {
       await fs.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("injects self-improving bootstrap and heartbeat context when available", async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-self-improving-"));
+    const workspaceDir = path.join(tempRoot, "workspace");
+    const selfImprovingDir = path.join(tempRoot, "self-improving");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.mkdir(path.join(selfImprovingDir, "projects"), { recursive: true });
+    await fs.writeFile(path.join(selfImprovingDir, "index.md"), "# index\n- principle", "utf-8");
+    await fs.writeFile(path.join(selfImprovingDir, "memory.md"), "# memory\n- lesson", "utf-8");
+    await fs.writeFile(
+      path.join(selfImprovingDir, "heartbeat-state.md"),
+      "last-check: ok",
+      "utf-8",
+    );
+
+    try {
+      const files = await loadWorkspaceBootstrapFiles(workspaceDir);
+      const selfImprovingBootstrap = files.find(
+        (file) =>
+          file.name === DEFAULT_BOOTSTRAP_FILENAME &&
+          file.path.endsWith("SELF-IMPROVING.bootstrap.md") &&
+          !file.missing,
+      );
+      const selfImprovingHeartbeat = files.find(
+        (file) =>
+          file.name === DEFAULT_HEARTBEAT_FILENAME &&
+          file.path.endsWith("SELF-IMPROVING.heartbeat.md") &&
+          !file.missing,
+      );
+
+      expect(selfImprovingBootstrap?.content).toContain("Self-Improving Runtime Context");
+      expect(selfImprovingBootstrap?.content).toContain("## index.md");
+      expect(selfImprovingBootstrap?.content).toContain("## memory.md");
+      expect(selfImprovingHeartbeat?.content).toContain("Self-Improving Heartbeat State");
+      expect(selfImprovingHeartbeat?.content).toContain("## heartbeat-state.md");
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
     }
   });
 });

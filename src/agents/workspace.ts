@@ -31,6 +31,7 @@ export const DEFAULT_HEARTBEAT_FILENAME = "HEARTBEAT.md";
 export const DEFAULT_BOOTSTRAP_FILENAME = "BOOTSTRAP.md";
 export const DEFAULT_MEMORY_FILENAME = "MEMORY.md";
 export const DEFAULT_MEMORY_ALT_FILENAME = "memory.md";
+const DEFAULT_SELF_IMPROVING_DIRNAME = "self-improving";
 const WORKSPACE_STATE_DIRNAME = ".openclaw";
 const WORKSPACE_STATE_FILENAME = "workspace-state.json";
 const WORKSPACE_STATE_VERSION = 1;
@@ -38,6 +39,15 @@ const WORKSPACE_STATE_VERSION = 1;
 const workspaceTemplateCache = new Map<string, Promise<string>>();
 let gitAvailabilityPromise: Promise<boolean> | null = null;
 const MAX_WORKSPACE_BOOTSTRAP_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_SELF_IMPROVING_FILE_BYTES = 256 * 1024;
+const SELF_IMPROVING_MEMORY_FILES = [
+  "index.md",
+  "memory.md",
+  "corrections.md",
+  path.join("projects", "index.md"),
+  path.join("domains", "index.md"),
+] as const;
+const SELF_IMPROVING_HEARTBEAT_FILES = ["heartbeat-state.md"] as const;
 
 // File content cache keyed by stable file identity to avoid stale reads.
 const workspaceFileCache = new Map<string, { content: string; identity: string }>();
@@ -478,6 +488,119 @@ async function resolveMemoryBootstrapEntry(
   return null;
 }
 
+function splitSelfImprovingSections(content: string): string {
+  return content.trim().replace(/\r\n/g, "\n");
+}
+
+function renderSelfImprovingSection(sourcePath: string, content: string): string {
+  const normalized = splitSelfImprovingSections(content);
+  return [`## ${sourcePath}`, normalized].join("\n\n");
+}
+
+async function readSelfImprovingFileIfPresent(filePath: string): Promise<string | null> {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) {
+      return null;
+    }
+    if (stat.size > MAX_SELF_IMPROVING_FILE_BYTES) {
+      return null;
+    }
+    const content = await fs.readFile(filePath, "utf-8");
+    const trimmed = splitSelfImprovingSections(content);
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveSelfImprovingDirectory(resolvedDir: string): Promise<string | null> {
+  const parentDir = path.dirname(resolvedDir);
+  const envPath = process.env.OPENCLAW_SELF_IMPROVING_DIR?.trim();
+  const candidates = [
+    envPath,
+    path.join(resolvedDir, DEFAULT_SELF_IMPROVING_DIRNAME),
+    path.join(parentDir, DEFAULT_SELF_IMPROVING_DIRNAME),
+    path.join(resolveRequiredHomeDir(process.env), DEFAULT_SELF_IMPROVING_DIRNAME),
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const normalized = resolveUserPath(candidate);
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    try {
+      const stat = await fs.stat(normalized);
+      if (stat.isDirectory()) {
+        return normalized;
+      }
+    } catch {
+      // ignore missing candidate
+    }
+  }
+  return null;
+}
+
+async function loadSelfImprovingBootstrapFiles(
+  resolvedDir: string,
+): Promise<WorkspaceBootstrapFile[]> {
+  const selfImprovingDir = await resolveSelfImprovingDirectory(resolvedDir);
+  if (!selfImprovingDir) {
+    return [];
+  }
+
+  const memorySections: string[] = [];
+  for (const relPath of SELF_IMPROVING_MEMORY_FILES) {
+    const absolutePath = path.join(selfImprovingDir, relPath);
+    const content = await readSelfImprovingFileIfPresent(absolutePath);
+    if (!content) {
+      continue;
+    }
+    memorySections.push(renderSelfImprovingSection(relPath, content));
+  }
+
+  const heartbeatSections: string[] = [];
+  for (const relPath of SELF_IMPROVING_HEARTBEAT_FILES) {
+    const absolutePath = path.join(selfImprovingDir, relPath);
+    const content = await readSelfImprovingFileIfPresent(absolutePath);
+    if (!content) {
+      continue;
+    }
+    heartbeatSections.push(renderSelfImprovingSection(relPath, content));
+  }
+
+  const files: WorkspaceBootstrapFile[] = [];
+  if (memorySections.length > 0) {
+    files.push({
+      name: DEFAULT_BOOTSTRAP_FILENAME,
+      path: path.join(selfImprovingDir, "SELF-IMPROVING.bootstrap.md"),
+      content: [
+        "# Self-Improving Runtime Context",
+        `Source: ${selfImprovingDir}`,
+        "",
+        ...memorySections,
+      ].join("\n"),
+      missing: false,
+    });
+  }
+  if (heartbeatSections.length > 0) {
+    files.push({
+      name: DEFAULT_HEARTBEAT_FILENAME,
+      path: path.join(selfImprovingDir, "SELF-IMPROVING.heartbeat.md"),
+      content: [
+        "# Self-Improving Heartbeat State",
+        `Source: ${selfImprovingDir}`,
+        "",
+        ...heartbeatSections,
+      ].join("\n"),
+      missing: false,
+    });
+  }
+  return files;
+}
+
 export async function loadWorkspaceBootstrapFiles(dir: string): Promise<WorkspaceBootstrapFile[]> {
   const resolvedDir = resolveUserPath(dir);
 
@@ -537,6 +660,12 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
       result.push({ name: entry.name, path: entry.filePath, missing: true });
     }
   }
+
+  const selfImprovingBootstrap = await loadSelfImprovingBootstrapFiles(resolvedDir);
+  if (selfImprovingBootstrap.length > 0) {
+    result.push(...selfImprovingBootstrap);
+  }
+
   return result;
 }
 
