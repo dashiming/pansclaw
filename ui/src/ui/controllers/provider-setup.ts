@@ -107,8 +107,12 @@ function buildDefaultModelEntry(modelId: string) {
   };
 }
 
-function buildVllmProviderPatch(state: ProviderSetupState, modelRef: string, baseUrl: string) {
-  const providerId = "vllm";
+function buildOpenAiCompatibleProviderPatch(
+  state: ProviderSetupState,
+  providerId: string,
+  modelRef: string,
+  baseUrl: string,
+) {
   const providerModelId = extractProviderModelId(modelRef, providerId);
   const existingProvider = resolveProviderConfig(state, providerId);
   const existingModels = Array.isArray(existingProvider?.models)
@@ -172,7 +176,7 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
     const currentBaseUrl =
       typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
     const nextBaseUrl = normalizeBaseUrl(
-      state.modelSetupBaseUrlDrafts[providerId]?.trim() || currentBaseUrl,
+      state.modelSetupBaseUrlDrafts[providerId] ?? currentBaseUrl,
     );
     if (!nextBaseUrl) {
       state.modelSetupModelMessage = {
@@ -186,12 +190,50 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
       state.modelSetupModelMessage = { kind: "error", text: baseUrlError };
       return;
     }
-    providerPatch = buildVllmProviderPatch(state, model, nextBaseUrl);
+    providerPatch = buildOpenAiCompatibleProviderPatch(state, providerId, model, nextBaseUrl);
+  } else if (providerId) {
+    const existingProvider = resolveProviderConfig(state, providerId);
+    const currentBaseUrl =
+      typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
+    const nextBaseUrl = normalizeBaseUrl(
+      state.modelSetupBaseUrlDrafts[providerId] ?? currentBaseUrl,
+    );
+    if (nextBaseUrl) {
+      const baseUrlError = validateHttpBaseUrl(nextBaseUrl);
+      if (baseUrlError) {
+        state.modelSetupModelMessage = { kind: "error", text: baseUrlError };
+        return;
+      }
+      providerPatch = buildOpenAiCompatibleProviderPatch(state, providerId, model, nextBaseUrl);
+    }
   }
 
   state.modelSetupModelSaving = true;
   state.modelSetupModelMessage = null;
   try {
+    const currentPrimaryModel = (() => {
+      const cfg = state.configSnapshot?.config;
+      if (!isRecord(cfg)) {
+        return "";
+      }
+      const agents = isRecord(cfg.agents) ? cfg.agents : null;
+      const defaults = agents && isRecord(agents.defaults) ? agents.defaults : null;
+      const rawModel = defaults?.model;
+      if (typeof rawModel === "string") {
+        return rawModel;
+      }
+      if (isRecord(rawModel) && typeof rawModel.primary === "string") {
+        return rawModel.primary;
+      }
+      return "";
+    })();
+    const modelChanged = currentPrimaryModel.trim() !== model;
+    const providerChanged = Boolean(providerId && providerPatch);
+    if (!modelChanged && !providerChanged) {
+      state.modelSetupModelMessage = { kind: "error", text: "No changes to save." };
+      return;
+    }
+
     const patch: Record<string, unknown> = {
       agents: { defaults: { model: { primary: model } } },
     };

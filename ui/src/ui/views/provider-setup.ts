@@ -174,6 +174,10 @@ function inferProviderFromModelId(modelId: string): string {
   return trimmed.slice(0, slashIndex).toLowerCase();
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export function renderProviderSetup(props: ProviderSetupProps) {
@@ -196,9 +200,11 @@ function renderModelCard(props: ProviderSetupProps) {
     selectedOption?.provider?.trim().toLowerCase() ?? inferProviderFromModelId(selected);
   const selectedProviderInfo =
     KNOWN_PROVIDERS.find((entry) => entry.id === selectedProvider) ?? null;
+  const currentProviderBaseUrl = selectedProvider
+    ? resolveCurrentProviderBaseUrl(selectedProvider, props.configSnapshot)
+    : "";
   const providerBaseUrl = selectedProvider
-    ? (props.modelSetupBaseUrlDrafts[selectedProvider] ??
-      resolveCurrentProviderBaseUrl(selectedProvider, props.configSnapshot))
+    ? (props.modelSetupBaseUrlDrafts[selectedProvider] ?? currentProviderBaseUrl)
     : "";
   const providerDraft = selectedProvider ? (props.authProfilesDrafts[selectedProvider] ?? "") : "";
   const providerStatus = selectedProvider
@@ -209,19 +215,22 @@ function renderModelCard(props: ProviderSetupProps) {
     (selectedProvider ? props.authProfilesSavingProvider === selectedProvider : false);
   const needsApiKey = Boolean(selectedProviderInfo) && !providerStatus.configured;
   const needsBaseUrl = Boolean(selectedProviderInfo?.requiresBaseUrl) && !providerBaseUrl.trim();
+  const endpointChanged =
+    selectedProvider &&
+    normalizeBaseUrl(providerBaseUrl) !== normalizeBaseUrl(currentProviderBaseUrl);
   const canConfirm =
     Boolean(selected) &&
     props.connected &&
     !busy &&
     !needsBaseUrl &&
     (!needsApiKey || providerDraft.trim().length > 0) &&
-    (selected !== currentModel || providerDraft.trim().length > 0);
+    (selected !== currentModel || providerDraft.trim().length > 0 || Boolean(endpointChanged));
 
   const handleConfirm = async () => {
     if (!canConfirm) {
       return;
     }
-    if (needsApiKey && selectedProvider && providerDraft.trim()) {
+    if (selectedProvider && providerDraft.trim()) {
       await props.onSaveProviderKey(selectedProvider);
     }
     await props.onSaveModel();
@@ -437,6 +446,8 @@ function renderModelCard(props: ProviderSetupProps) {
           </div>
         </div>
         <div class="provider-model-key-wrap">
+          <label class="field" style="gap: 6px;">
+            <span>Model name / ID</span>
           <input
             class="provider-model-key-input"
             type="text"
@@ -447,18 +458,21 @@ function renderModelCard(props: ProviderSetupProps) {
             ?disabled=${busy || !props.connected}
             @input=${(e: Event) => props.onModelSelect((e.target as HTMLInputElement).value)}
           />
+          </label>
         </div>
         ${
-          selectedProviderInfo?.requiresBaseUrl
+          selectedProvider
             ? html`
               <div class="provider-model-key-wrap">
+                <label class="field" style="gap: 6px;">
+                  <span>Endpoint URL</span>
                 <input
                   class="provider-model-key-input"
                   type="text"
                   autocomplete="off"
                   spellcheck="false"
                   .value=${providerBaseUrl}
-                  placeholder=${selectedProviderInfo.baseUrlPlaceholder ?? "https://your-server/v1"}
+                  placeholder=${selectedProviderInfo?.baseUrlPlaceholder ?? "https://your-server/v1"}
                   ?disabled=${busy || !props.connected}
                   @input=${(e: Event) =>
                     props.onBaseUrlDraftChange(
@@ -466,11 +480,14 @@ function renderModelCard(props: ProviderSetupProps) {
                       (e.target as HTMLInputElement).value,
                     )}
                 />
+                </label>
               </div>
             `
             : nothing
         }
         <div class="provider-model-key-wrap">
+          <label class="field" style="gap: 6px;">
+            <span>API key</span>
           <input
             class="provider-model-key-input"
             type="password"
@@ -479,14 +496,17 @@ function renderModelCard(props: ProviderSetupProps) {
             placeholder=${
               selectedProviderInfo
                 ? `Enter ${selectedProviderInfo.label} API key`
-                : "API key (if needed)"
+                : selectedProvider
+                  ? `Enter ${selectedProvider} API key`
+                  : "API key (if needed)"
             }
-            ?disabled=${busy || !props.connected || !selectedProviderInfo}
+            ?disabled=${busy || !props.connected || !selectedProvider}
             @input=${(e: Event) =>
               selectedProvider
                 ? props.onDraftChange(selectedProvider, (e.target as HTMLInputElement).value)
                 : null}
           />
+          </label>
         </div>
         <button
           class="btn primary"
@@ -508,7 +528,7 @@ function renderModelCard(props: ProviderSetupProps) {
       }
 
       <div class="muted" style="margin-top: 8px;">
-        You can pick from the list or enter any custom model ID.
+        Fill in model name/ID, endpoint URL (if needed), and API key, then confirm.
       </div>
 
       ${
