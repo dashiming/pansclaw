@@ -27,7 +27,7 @@ function createState(request = vi.fn()): ProviderSetupState {
 }
 
 describe("provider-setup controller", () => {
-  it("requires a remote endpoint before saving vllm models", async () => {
+  it("requires endpoint before saving vllm models", async () => {
     const state = createState();
     updateProviderSetupModelSelection(state, "vllm/minimax-m2.5-gs32");
 
@@ -35,7 +35,19 @@ describe("provider-setup controller", () => {
 
     expect(state.modelSetupModelMessage).toEqual({
       kind: "error",
-      text: "Enter the remote DGX / vLLM endpoint before saving.",
+      text: "Enter endpoint URL before saving.",
+    });
+  });
+
+  it("requires endpoint before saving non-vllm models", async () => {
+    const state = createState();
+    updateProviderSetupModelSelection(state, "openai/gpt-oss-120b");
+
+    await saveProviderSetupDefaultModel(state);
+
+    expect(state.modelSetupModelMessage).toEqual({
+      kind: "error",
+      text: "Enter endpoint URL before saving.",
     });
   });
 
@@ -81,7 +93,7 @@ describe("provider-setup controller", () => {
     });
     expect(state.modelSetupModelMessage).toEqual({
       kind: "success",
-      text: "Default model and remote vLLM endpoint updated.",
+      text: "Default model and endpoint updated.",
     });
     expect(state.configForm).toMatchObject({
       agents: { defaults: { model: { primary: "vllm/minimax-m2.5-gs32" } } },
@@ -129,7 +141,41 @@ describe("provider-setup controller", () => {
     });
     expect(state.modelSetupModelMessage).toEqual({
       kind: "success",
-      text: "Default model updated.",
+      text: "Default model and endpoint updated.",
+    });
+  });
+
+  it("treats custom unprefixed model as vllm-compatible setup", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const state = createState(request);
+    updateProviderSetupModelSelection(state, "MiniMax-M2.5");
+    updateProviderSetupBaseUrlDraft(state, "vllm", "http://host.docker.internal:18080/v1");
+
+    await saveProviderSetupDefaultModel(state);
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(request.mock.calls[0][1].raw) as Record<string, unknown>;
+    expect(payload).toEqual({
+      agents: { defaults: { model: { primary: "vllm/MiniMax-M2.5" } } },
+      models: {
+        providers: {
+          vllm: {
+            api: "openai-completions",
+            baseUrl: "http://host.docker.internal:18080/v1",
+            models: [
+              {
+                id: "MiniMax-M2.5",
+                name: "MiniMax-M2.5",
+                reasoning: false,
+                input: ["text"],
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                contextWindow: 128000,
+                maxTokens: 8192,
+              },
+            ],
+          },
+        },
+      },
     });
   });
 });

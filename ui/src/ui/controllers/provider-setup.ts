@@ -46,6 +46,26 @@ function inferProviderFromModelId(modelId: string): string {
   return trimmed.slice(0, slashIndex).toLowerCase();
 }
 
+function resolveProviderForModel(modelId: string): string {
+  const inferred = inferProviderFromModelId(modelId);
+  if (inferred) {
+    return inferred;
+  }
+  // Custom model IDs without a provider prefix are treated as OpenAI-compatible remote models.
+  return "vllm";
+}
+
+function toCanonicalModelRef(modelId: string, providerId: string): string {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.includes("/")) {
+    return trimmed;
+  }
+  return `${providerId}/${trimmed}`;
+}
+
 function extractProviderModelId(modelRef: string, providerId: string): string {
   const trimmed = modelRef.trim();
   const prefix = `${providerId.trim().toLowerCase()}/`;
@@ -164,14 +184,15 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
     return;
   }
   const model = state.modelSetupSelectedModel.trim();
-  const providerId = inferProviderFromModelId(model);
+  const providerId = resolveProviderForModel(model);
+  const modelRef = toCanonicalModelRef(model, providerId);
   if (!model) {
     state.modelSetupModelMessage = { kind: "error", text: "Please select a model first." };
     return;
   }
 
   let providerPatch: Record<string, unknown> | null = null;
-  if (providerId === "vllm") {
+  if (providerId) {
     const existingProvider = resolveProviderConfig(state, providerId);
     const currentBaseUrl =
       typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
@@ -181,7 +202,7 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
     if (!nextBaseUrl) {
       state.modelSetupModelMessage = {
         kind: "error",
-        text: "Enter the remote DGX / vLLM endpoint before saving.",
+        text: "Enter endpoint URL before saving.",
       };
       return;
     }
@@ -190,22 +211,7 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
       state.modelSetupModelMessage = { kind: "error", text: baseUrlError };
       return;
     }
-    providerPatch = buildOpenAiCompatibleProviderPatch(state, providerId, model, nextBaseUrl);
-  } else if (providerId) {
-    const existingProvider = resolveProviderConfig(state, providerId);
-    const currentBaseUrl =
-      typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
-    const nextBaseUrl = normalizeBaseUrl(
-      state.modelSetupBaseUrlDrafts[providerId] ?? currentBaseUrl,
-    );
-    if (nextBaseUrl) {
-      const baseUrlError = validateHttpBaseUrl(nextBaseUrl);
-      if (baseUrlError) {
-        state.modelSetupModelMessage = { kind: "error", text: baseUrlError };
-        return;
-      }
-      providerPatch = buildOpenAiCompatibleProviderPatch(state, providerId, model, nextBaseUrl);
-    }
+    providerPatch = buildOpenAiCompatibleProviderPatch(state, providerId, modelRef, nextBaseUrl);
   }
 
   state.modelSetupModelSaving = true;
@@ -227,7 +233,7 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
       }
       return "";
     })();
-    const modelChanged = currentPrimaryModel.trim() !== model;
+    const modelChanged = currentPrimaryModel.trim() !== modelRef;
     const providerChanged = Boolean(providerId && providerPatch);
     if (!modelChanged && !providerChanged) {
       state.modelSetupModelMessage = { kind: "error", text: "No changes to save." };
@@ -235,7 +241,7 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
     }
 
     const patch: Record<string, unknown> = {
-      agents: { defaults: { model: { primary: model } } },
+      agents: { defaults: { model: { primary: modelRef } } },
     };
     if (providerId && providerPatch) {
       patch.models = { providers: { [providerId]: providerPatch } };
@@ -256,15 +262,12 @@ export async function saveProviderSetupDefaultModel(state: ProviderSetupState) {
       updateConfigFormValue(
         state as unknown as Parameters<typeof updateConfigFormValue>[0],
         ["agents", "defaults", "model", "primary"],
-        model,
+        modelRef,
       );
     }
     state.modelSetupModelMessage = {
       kind: "success",
-      text:
-        providerId === "vllm"
-          ? "Default model and remote vLLM endpoint updated."
-          : "Default model updated.",
+      text: "Default model and endpoint updated.",
     };
   } catch (err) {
     state.modelSetupModelMessage = {
