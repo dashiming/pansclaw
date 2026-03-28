@@ -257,8 +257,10 @@ fi
 
 echo "Building image from $REPO_PATH..."
 BUILD_ARGS=()
+OPENCLAW_GIT_COMMIT="${OPENCLAW_GIT_COMMIT:-$(git -C "$REPO_PATH" rev-parse HEAD 2>/dev/null || true)}"
 [[ -n "${OPENCLAW_DOCKER_APT_PACKAGES:-}" ]] && BUILD_ARGS+=(--build-arg "OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES}")
 [[ -n "${OPENCLAW_EXTENSIONS:-}" ]] && BUILD_ARGS+=(--build-arg "OPENCLAW_EXTENSIONS=${OPENCLAW_EXTENSIONS}")
+[[ -n "${OPENCLAW_GIT_COMMIT:-}" ]] && BUILD_ARGS+=(--build-arg "OPENCLAW_GIT_COMMIT=${OPENCLAW_GIT_COMMIT}")
 podman build ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} -t openclaw:local -f "$REPO_PATH/Dockerfile" "$REPO_PATH"
 
 echo "Loading image into $OPENCLAW_USER's Podman store..."
