@@ -135,6 +135,18 @@ function resolveConfiguredStatus(
   return { configured: false, label: "Not configured" };
 }
 
+function inferProviderFromModelId(modelId: string): string {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0) {
+    return "";
+  }
+  return trimmed.slice(0, slashIndex).toLowerCase();
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export function renderProviderSetup(props: ProviderSetupProps) {
@@ -153,7 +165,8 @@ function renderModelCard(props: ProviderSetupProps) {
   const options = buildChatModelOptions(props.chatModelCatalog, selected, currentModel);
   const grouped = groupChatModelOptions(options);
   const selectedOption = options.find((entry) => entry.value === selected) ?? null;
-  const selectedProvider = selectedOption?.provider ?? "";
+  const selectedProvider =
+    selectedOption?.provider?.trim().toLowerCase() ?? inferProviderFromModelId(selected);
   const selectedProviderInfo =
     KNOWN_PROVIDERS.find((entry) => entry.id === selectedProvider) ?? null;
   const providerDraft = selectedProvider ? (props.authProfilesDrafts[selectedProvider] ?? "") : "";
@@ -393,6 +406,18 @@ function renderModelCard(props: ProviderSetupProps) {
         <div class="provider-model-key-wrap">
           <input
             class="provider-model-key-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            .value=${selected}
+            placeholder="Custom model ID (for example: ollama/qwen2.5:14b)"
+            ?disabled=${busy || !props.connected}
+            @input=${(e: Event) => props.onModelSelect((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="provider-model-key-wrap">
+          <input
+            class="provider-model-key-input"
             type="password"
             autocomplete="off"
             .value=${providerDraft}
@@ -426,6 +451,10 @@ function renderModelCard(props: ProviderSetupProps) {
           </div>`
           : nothing
       }
+
+      <div class="muted" style="margin-top: 8px;">
+        You can pick from the list or enter any custom model ID.
+      </div>
 
       ${
         selectedProviderInfo
