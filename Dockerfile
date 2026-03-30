@@ -194,6 +194,34 @@ RUN --mount=type=cache,id=openclaw-bookworm-apt-cache,target=/var/cache/apt,shar
       chown -R node:node /home/node/.cache/ms-playwright; \
     fi
 
+# Preinstall agent-browser skill runtime and browser payload in the image so
+# skill usage does not need a first-run download in Docker deployments.
+# Disable by passing: --build-arg OPENCLAW_INSTALL_AGENT_BROWSER=
+ARG OPENCLAW_INSTALL_AGENT_BROWSER="1"
+RUN --mount=type=cache,id=openclaw-bookworm-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=openclaw-bookworm-apt-lists,target=/var/lib/apt,sharing=locked \
+    if [ -n "$OPENCLAW_INSTALL_AGENT_BROWSER" ]; then \
+      npm install -g agent-browser && \
+      arch="$(dpkg --print-architecture)" && \
+      if [ "$arch" = "arm64" ]; then \
+        for attempt in 1 2 3 4 5; do \
+          if apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium; then \
+            break; \
+          fi; \
+          if [ "$attempt" -eq 5 ]; then \
+            exit 1; \
+          fi; \
+          sleep $((attempt * 2)); \
+        done; \
+      elif agent-browser --help | grep -q -- '--with-deps'; then \
+        HOME=/home/node agent-browser install --with-deps; \
+      else \
+        HOME=/home/node agent-browser install; \
+      fi && \
+      mkdir -p /home/node/.cache && \
+      chown -R node:node /home/node/.cache; \
+    fi
+
 # Optionally install Docker CLI for sandbox container management.
 # Build with: docker build --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1 ...
 # Adds ~50MB. Only the CLI is installed — no Docker daemon.
@@ -232,6 +260,7 @@ RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
 
 ENV NODE_ENV=production
 ENV OPENCLAW_BUILD_COMMIT="${OPENCLAW_GIT_COMMIT}"
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Security hardening: Run as non-root user
 # The node:24-bookworm image includes a 'node' user (uid 1000)
