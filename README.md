@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.2.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-v0.3.1-blue" alt="version">
   <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen" alt="node">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
 </p>
@@ -25,9 +25,10 @@
 
 - [特性](#特性)
 - [系统要求](#系统要求)
-- [方式一：Docker Compose 部署（推荐）](#方式一docker-compose-部署推荐)
-- [方式二：全局 npm 安装](#方式二全局-npm-安装)
-- [方式三：从源码构建](#方式三从源码构建)
+- [方式一：mac 本地一键安装（推荐）](#方式一mac-本地一键安装推荐)
+- [方式二：Docker Compose 部署](#方式二docker-compose-部署)
+- [方式三：全局 npm 安装](#方式三全局-npm-安装)
+- [方式四：从源码构建](#方式四从源码构建)
 - [配置 API 密钥](#配置-api-密钥)
 - [启动与访问](#启动与访问)
 - [使用教程](#使用教程)
@@ -58,7 +59,27 @@
 
 ---
 
-## 方式一：Docker Compose 部署（推荐）
+## 方式一：mac 本地一键安装（推荐）
+
+给普通用户最简单的方式：一条命令完成依赖安装、CLI 安装、网关初始化和本地启动。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dashiming/pansclaw/main/scripts/install-macos-local.sh | bash
+```
+
+脚本会自动完成：
+
+- 检查并安装 Homebrew（如缺失）
+- 安装 Node.js 24（满足 Node 22.16+ 要求）
+- 全局安装 `pansclaw@latest`
+- 执行本地 onboarding（loopback + daemon）
+- 输出 Dashboard 地址和登录 Token
+
+适用场景：个人 Mac、本地开发机、希望不用 Docker 的用户。
+
+---
+
+## 方式二：Docker Compose 部署
 
 Docker Compose 是生产环境和 VPS 部署的首选方式，配置最简单，开箱即用。
 
@@ -114,7 +135,7 @@ docker compose ps
 
 ---
 
-## 方式二：全局 npm 安装
+## 方式三：全局 npm 安装
 
 适合在本机快速体验，无需 Docker。
 
@@ -146,7 +167,7 @@ pansclaw dashboard            # 在浏览器中打开控制台
 
 ---
 
-## 方式三：从源码构建
+## 方式四：从源码构建
 
 适合开发者贡献代码或定制功能。
 
