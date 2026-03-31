@@ -46,11 +46,17 @@ import {
   ToolCatalogProfileSchema,
   ToolsCatalogParamsSchema,
   ToolsCatalogResultSchema,
+  ToolsEffectiveEntrySchema,
+  ToolsEffectiveGroupSchema,
+  ToolsEffectiveParamsSchema,
+  ToolsEffectiveResultSchema,
 } from "./agents-models-skills.js";
 import {
   ChannelsLogoutParamsSchema,
   TalkConfigParamsSchema,
   TalkConfigResultSchema,
+  TalkSpeakParamsSchema,
+  TalkSpeakResultSchema,
   ChannelsStatusParamsSchema,
   ChannelsStatusResultSchema,
   TalkModeParamsSchema,
@@ -137,6 +143,10 @@ import {
   NodePairVerifyParamsSchema,
   NodeRenameParamsSchema,
 } from "./nodes.js";
+import {
+  PluginApprovalRequestParamsSchema,
+  PluginApprovalResolveParamsSchema,
+} from "./plugin-approvals.js";
 import { PushTestParamsSchema, PushTestResultSchema } from "./push.js";
 import {
   SecretsReloadParamsSchema,
@@ -145,13 +155,18 @@ import {
   SecretsResolveResultSchema,
 } from "./secrets.js";
 import {
+  SessionsAbortParamsSchema,
   SessionsCompactParamsSchema,
+  SessionsCreateParamsSchema,
   SessionsDeleteParamsSchema,
   SessionsListParamsSchema,
+  SessionsMessagesSubscribeParamsSchema,
+  SessionsMessagesUnsubscribeParamsSchema,
   SessionsPatchParamsSchema,
   SessionsPreviewParamsSchema,
   SessionsResetParamsSchema,
   SessionsResolveParamsSchema,
+  SessionsSendParamsSchema,
   SessionsUsageParamsSchema,
 } from "./sessions.js";
 import { PresenceEntrySchema, SnapshotSchema, StateVersionSchema } from "./snapshot.js";
@@ -211,6 +226,11 @@ export const ProtocolSchemas = {
   SessionsListParams: SessionsListParamsSchema,
   SessionsPreviewParams: SessionsPreviewParamsSchema,
   SessionsResolveParams: SessionsResolveParamsSchema,
+  SessionsCreateParams: SessionsCreateParamsSchema,
+  SessionsSendParams: SessionsSendParamsSchema,
+  SessionsMessagesSubscribeParams: SessionsMessagesSubscribeParamsSchema,
+  SessionsMessagesUnsubscribeParams: SessionsMessagesUnsubscribeParamsSchema,
+  SessionsAbortParams: SessionsAbortParamsSchema,
   SessionsPatchParams: SessionsPatchParamsSchema,
   SessionsResetParams: SessionsResetParamsSchema,
   SessionsDeleteParams: SessionsDeleteParamsSchema,
@@ -235,6 +255,8 @@ export const ProtocolSchemas = {
   TalkModeParams: TalkModeParamsSchema,
   TalkConfigParams: TalkConfigParamsSchema,
   TalkConfigResult: TalkConfigResultSchema,
+  TalkSpeakParams: TalkSpeakParamsSchema,
+  TalkSpeakResult: TalkSpeakResultSchema,
   ChannelsStatusParams: ChannelsStatusParamsSchema,
   ChannelsStatusResult: ChannelsStatusResultSchema,
   ChannelsLogoutParams: ChannelsLogoutParamsSchema,
@@ -272,6 +294,10 @@ export const ProtocolSchemas = {
   ToolCatalogEntry: ToolCatalogEntrySchema,
   ToolCatalogGroup: ToolCatalogGroupSchema,
   ToolsCatalogResult: ToolsCatalogResultSchema,
+  ToolsEffectiveParams: ToolsEffectiveParamsSchema,
+  ToolsEffectiveEntry: ToolsEffectiveEntrySchema,
+  ToolsEffectiveGroup: ToolsEffectiveGroupSchema,
+  ToolsEffectiveResult: ToolsEffectiveResultSchema,
   SkillsBinsParams: SkillsBinsParamsSchema,
   SkillsBinsResult: SkillsBinsResultSchema,
   SkillsInstallParams: SkillsInstallParamsSchema,
@@ -294,6 +320,8 @@ export const ProtocolSchemas = {
   ExecApprovalsSnapshot: ExecApprovalsSnapshotSchema,
   ExecApprovalRequestParams: ExecApprovalRequestParamsSchema,
   ExecApprovalResolveParams: ExecApprovalResolveParamsSchema,
+  PluginApprovalRequestParams: PluginApprovalRequestParamsSchema,
+  PluginApprovalResolveParams: PluginApprovalResolveParamsSchema,
   DevicePairListParams: DevicePairListParamsSchema,
   DevicePairApproveParams: DevicePairApproveParamsSchema,
   DevicePairRejectParams: DevicePairRejectParamsSchema,

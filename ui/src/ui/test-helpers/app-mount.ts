@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, vi } from "vitest";
 import { i18n } from "../../i18n/index.ts";
+import { getSafeLocalStorage, getSafeSessionStorage } from "../../local-storage.ts";
 import "../app.ts";
-import type { PansClawApp } from "../app.ts";
+import type { OpenClawApp } from "../app.ts";
 
 class MockWebSocket {
   static CONNECTING = 0;
@@ -22,7 +23,7 @@ class MockWebSocket {
 
 export function mountApp(pathname: string) {
   window.history.replaceState({}, "", pathname);
-  const app = document.createElement("openclaw-app") as PansClawApp;
+  const app = document.createElement("openclaw-app") as OpenClawApp;
   document.body.append(app);
   app.connected = true;
   app.requestUpdate();
@@ -32,8 +33,8 @@ export function mountApp(pathname: string) {
 export function registerAppMountHooks() {
   beforeEach(async () => {
     window.__OPENCLAW_CONTROL_UI_BASE_PATH__ = undefined;
-    localStorage.clear();
-    sessionStorage.clear();
+    getSafeLocalStorage()?.clear();
+    getSafeSessionStorage()?.clear();
     document.body.innerHTML = "";
     await i18n.setLocale("en");
     vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
@@ -45,8 +46,8 @@ export function registerAppMountHooks() {
 
   afterEach(async () => {
     window.__OPENCLAW_CONTROL_UI_BASE_PATH__ = undefined;
-    localStorage.clear();
-    sessionStorage.clear();
+    getSafeLocalStorage()?.clear();
+    getSafeSessionStorage()?.clear();
     document.body.innerHTML = "";
     await i18n.setLocale("en");
     vi.unstubAllGlobals();

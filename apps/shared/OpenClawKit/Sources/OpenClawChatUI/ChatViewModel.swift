@@ -1,4 +1,4 @@
-import PansClawKit
+import OpenClawKit
 import Foundation
 import Observation
 import OSLog
@@ -10,33 +10,33 @@ import AppKit
 import UIKit
 #endif
 
-private let chatUILogger = Logger(subsystem: "ai.openclaw", category: "PansClawChatUI")
+private let chatUILogger = Logger(subsystem: "ai.openclaw", category: "OpenClawChatUI")
 
 @MainActor
 @Observable
-public final class PansClawChatViewModel {
+public final class OpenClawChatViewModel {
     public static let defaultModelSelectionID = "__default__"
 
-    public private(set) var messages: [PansClawChatMessage] = []
+    public private(set) var messages: [OpenClawChatMessage] = []
     public var input: String = ""
     public private(set) var thinkingLevel: String
     public private(set) var modelSelectionID: String = "__default__"
-    public private(set) var modelChoices: [PansClawChatModelChoice] = []
+    public private(set) var modelChoices: [OpenClawChatModelChoice] = []
     public private(set) var isLoading = false
     public private(set) var isSending = false
     public private(set) var isAborting = false
     public var errorText: String?
-    public var attachments: [PansClawPendingAttachment] = []
+    public var attachments: [OpenClawPendingAttachment] = []
     public private(set) var healthOK: Bool = false
     public private(set) var pendingRunCount: Int = 0
 
     public private(set) var sessionKey: String
     public private(set) var sessionId: String?
     public private(set) var streamingAssistantText: String?
-    public private(set) var pendingToolCalls: [PansClawChatPendingToolCall] = []
-    public private(set) var sessions: [PansClawChatSessionEntry] = []
-    private let transport: any PansClawChatTransport
-    private var sessionDefaults: PansClawChatSessionsDefaults?
+    public private(set) var pendingToolCalls: [OpenClawChatPendingToolCall] = []
+    public private(set) var sessions: [OpenClawChatSessionEntry] = []
+    private let transport: any OpenClawChatTransport
+    private var sessionDefaults: OpenClawChatSessionsDefaults?
     private let prefersExplicitThinkingLevel: Bool
     private let onThinkingLevelChanged: (@MainActor @Sendable (String) -> Void)?
 
@@ -60,8 +60,11 @@ public final class PansClawChatViewModel {
     private var nextThinkingSelectionRequestID: UInt64 = 0
     private var latestThinkingSelectionRequestIDsBySession: [String: UInt64] = [:]
     private var latestThinkingLevelsBySession: [String: String] = [:]
+    private var isCompacting = false
+    private var lastCompactAt: Date?
+    private let compactCooldown: TimeInterval = 60
 
-    private var pendingToolCallsById: [String: PansClawChatPendingToolCall] = [:] {
+    private var pendingToolCallsById: [String: OpenClawChatPendingToolCall] = [:] {
         didSet {
             self.pendingToolCalls = self.pendingToolCallsById.values
                 .sorted { ($0.startedAt ?? 0) < ($1.startedAt ?? 0) }
@@ -72,7 +75,7 @@ public final class PansClawChatViewModel {
 
     public init(
         sessionKey: String,
-        transport: any PansClawChatTransport,
+        transport: any OpenClawChatTransport,
         initialThinkingLevel: String? = nil,
         onThinkingLevelChanged: (@MainActor @Sendable (String) -> Void)? = nil)
     {
@@ -134,13 +137,13 @@ public final class PansClawChatViewModel {
         Task { await self.performSelectModel(selectionID) }
     }
 
-    public var sessionChoices: [PansClawChatSessionEntry] {
+    public var sessionChoices: [OpenClawChatSessionEntry] {
         let now = Date().timeIntervalSince1970 * 1000
         let cutoff = now - (24 * 60 * 60 * 1000)
         let sorted = self.sessions.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }
         let mainSessionKey = self.resolvedMainSessionKey
 
-        var result: [PansClawChatSessionEntry] = []
+        var result: [OpenClawChatSessionEntry] = []
         var included = Set<String>()
 
         // Always show the resolved main session first, even if it hasn't been updated recently.
@@ -202,7 +205,7 @@ public final class PansClawChatViewModel {
         Task { await self.addImageAttachment(url: nil, data: data, fileName: fileName, mimeType: mimeType) }
     }
 
-    public func removeAttachment(_ id: PansClawPendingAttachment.ID) {
+    public func removeAttachment(_ id: OpenClawPendingAttachment.ID) {
         self.attachments.removeAll { $0.id == id }
     }
 
@@ -249,23 +252,23 @@ public final class PansClawChatViewModel {
         }
     }
 
-    private static func decodeMessages(_ raw: [AnyCodable]) -> [PansClawChatMessage] {
+    private static func decodeMessages(_ raw: [AnyCodable]) -> [OpenClawChatMessage] {
         let decoded = raw.compactMap { item in
-            (try? ChatPayloadDecoding.decode(item, as: PansClawChatMessage.self))
+            (try? ChatPayloadDecoding.decode(item, as: OpenClawChatMessage.self))
                 .map { Self.stripInboundMetadata(from: $0) }
         }
         return Self.dedupeMessages(decoded)
     }
 
-    private static func stripInboundMetadata(from message: PansClawChatMessage) -> PansClawChatMessage {
+    private static func stripInboundMetadata(from message: OpenClawChatMessage) -> OpenClawChatMessage {
         guard message.role.lowercased() == "user" else {
             return message
         }
 
-        let sanitizedContent = message.content.map { content -> PansClawChatMessageContent in
+        let sanitizedContent = message.content.map { content -> OpenClawChatMessageContent in
             guard let text = content.text else { return content }
             let cleaned = ChatMarkdownPreprocessor.preprocess(markdown: text).cleaned
-            return PansClawChatMessageContent(
+            return OpenClawChatMessageContent(
                 type: content.type,
                 text: cleaned,
                 thinking: content.thinking,
@@ -278,7 +281,7 @@ public final class PansClawChatViewModel {
                 arguments: content.arguments)
         }
 
-        return PansClawChatMessage(
+        return OpenClawChatMessage(
             id: message.id,
             role: message.role,
             content: sanitizedContent,
@@ -289,7 +292,18 @@ public final class PansClawChatViewModel {
             stopReason: message.stopReason)
     }
 
-    private static func messageIdentityKey(for message: PansClawChatMessage) -> String? {
+    private static func messageContentFingerprint(for message: OpenClawChatMessage) -> String {
+        message.content.map { item in
+            let type = (item.type ?? "text").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let text = (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = (item.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let fileName = (item.fileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return [type, text, id, name, fileName].joined(separator: "\\u{001F}")
+        }.joined(separator: "\\u{001E}")
+    }
+
+    private static func messageIdentityKey(for message: OpenClawChatMessage) -> String? {
         let role = message.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !role.isEmpty else { return nil }
 
@@ -298,15 +312,7 @@ public final class PansClawChatViewModel {
             return String(format: "%.3f", value)
         }()
 
-        let contentFingerprint = message.content.map { item in
-            let type = (item.type ?? "text").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let text = (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let id = (item.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let name = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let fileName = (item.fileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return [type, text, id, name, fileName].joined(separator: "\\u{001F}")
-        }.joined(separator: "\\u{001E}")
-
+        let contentFingerprint = Self.messageContentFingerprint(for: message)
         let toolCallId = (message.toolCallId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let toolName = (message.toolName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if timestamp.isEmpty, contentFingerprint.isEmpty, toolCallId.isEmpty, toolName.isEmpty {
@@ -315,9 +321,22 @@ public final class PansClawChatViewModel {
         return [role, timestamp, toolCallId, toolName, contentFingerprint].joined(separator: "|")
     }
 
+    private static func userRefreshIdentityKey(for message: OpenClawChatMessage) -> String? {
+        let role = message.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard role == "user" else { return nil }
+
+        let contentFingerprint = Self.messageContentFingerprint(for: message)
+        let toolCallId = (message.toolCallId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let toolName = (message.toolName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if contentFingerprint.isEmpty, toolCallId.isEmpty, toolName.isEmpty {
+            return nil
+        }
+        return [role, toolCallId, toolName, contentFingerprint].joined(separator: "|")
+    }
+
     private static func reconcileMessageIDs(
-        previous: [PansClawChatMessage],
-        incoming: [PansClawChatMessage]) -> [PansClawChatMessage]
+        previous: [OpenClawChatMessage],
+        incoming: [OpenClawChatMessage]) -> [OpenClawChatMessage]
     {
         guard !previous.isEmpty, !incoming.isEmpty else { return incoming }
 
@@ -341,7 +360,7 @@ public final class PansClawChatViewModel {
                 idsByKey[key] = ids
             }
             guard reusedId != message.id else { return message }
-            return PansClawChatMessage(
+            return OpenClawChatMessage(
                 id: reusedId,
                 role: message.role,
                 content: message.content,
@@ -353,8 +372,77 @@ public final class PansClawChatViewModel {
         }
     }
 
-    private static func dedupeMessages(_ messages: [PansClawChatMessage]) -> [PansClawChatMessage] {
-        var result: [PansClawChatMessage] = []
+    private static func reconcileRunRefreshMessages(
+        previous: [OpenClawChatMessage],
+        incoming: [OpenClawChatMessage]) -> [OpenClawChatMessage]
+    {
+        guard !previous.isEmpty else { return incoming }
+        guard !incoming.isEmpty else { return previous }
+
+        func countKeys(_ keys: [String]) -> [String: Int] {
+            keys.reduce(into: [:]) { counts, key in
+                counts[key, default: 0] += 1
+            }
+        }
+
+        var reconciled = Self.reconcileMessageIDs(previous: previous, incoming: incoming)
+        let incomingIdentityKeys = Set(reconciled.compactMap(Self.messageIdentityKey(for:)))
+        var remainingIncomingUserRefreshCounts = countKeys(
+            reconciled.compactMap(Self.userRefreshIdentityKey(for:)))
+
+        var lastMatchedPreviousIndex: Int?
+        for (index, message) in previous.enumerated() {
+            if let key = Self.messageIdentityKey(for: message),
+               incomingIdentityKeys.contains(key)
+            {
+                lastMatchedPreviousIndex = index
+                continue
+            }
+            if let userKey = Self.userRefreshIdentityKey(for: message),
+               let remaining = remainingIncomingUserRefreshCounts[userKey],
+               remaining > 0
+            {
+                remainingIncomingUserRefreshCounts[userKey] = remaining - 1
+                lastMatchedPreviousIndex = index
+            }
+        }
+
+        let trailingUserMessages = (lastMatchedPreviousIndex != nil
+            ? previous.suffix(from: previous.index(after: lastMatchedPreviousIndex!))
+            : ArraySlice(previous))
+            .filter { message in
+                guard message.role.lowercased() == "user" else { return false }
+                guard let key = Self.userRefreshIdentityKey(for: message) else { return false }
+                let remaining = remainingIncomingUserRefreshCounts[key] ?? 0
+                if remaining > 0 {
+                    remainingIncomingUserRefreshCounts[key] = remaining - 1
+                    return false
+                }
+                return true
+            }
+
+        guard !trailingUserMessages.isEmpty else {
+            return reconciled
+        }
+
+        for message in trailingUserMessages {
+            guard let messageTimestamp = message.timestamp else {
+                reconciled.append(message)
+                continue
+            }
+
+            let insertIndex = reconciled.firstIndex { existing in
+                guard let existingTimestamp = existing.timestamp else { return false }
+                return existingTimestamp > messageTimestamp
+            } ?? reconciled.endIndex
+            reconciled.insert(message, at: insertIndex)
+        }
+
+        return Self.dedupeMessages(reconciled)
+    }
+
+    private static func dedupeMessages(_ messages: [OpenClawChatMessage]) -> [OpenClawChatMessage] {
+        var result: [OpenClawChatMessage] = []
         result.reserveCapacity(messages.count)
         var seen = Set<String>()
 
@@ -371,7 +459,7 @@ public final class PansClawChatViewModel {
         return result
     }
 
-    private static func dedupeKey(for message: PansClawChatMessage) -> String? {
+    private static func dedupeKey(for message: OpenClawChatMessage) -> String? {
         guard let timestamp = message.timestamp else { return nil }
         let text = message.content.compactMap(\.text).joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -380,6 +468,7 @@ public final class PansClawChatViewModel {
     }
 
     private static let resetTriggers: Set<String> = ["/new", "/reset", "/clear"]
+    private static let compactTriggers: Set<String> = ["/compact"]
 
     private func performSend() async {
         guard !self.isSending else { return }
@@ -389,6 +478,11 @@ public final class PansClawChatViewModel {
         if Self.resetTriggers.contains(trimmed.lowercased()) {
             self.input = ""
             await self.performReset()
+            return
+        }
+        if Self.compactTriggers.contains(trimmed.lowercased()) {
+            self.input = ""
+            await self.performCompact()
             return
         }
 
@@ -410,8 +504,8 @@ public final class PansClawChatViewModel {
         self.streamingAssistantText = nil
 
         // Optimistically append user message to UI.
-        var userContent: [PansClawChatMessageContent] = [
-            PansClawChatMessageContent(
+        var userContent: [OpenClawChatMessageContent] = [
+            OpenClawChatMessageContent(
                 type: "text",
                 text: messageText,
                 thinking: nil,
@@ -423,8 +517,8 @@ public final class PansClawChatViewModel {
                 name: nil,
                 arguments: nil),
         ]
-        let encodedAttachments = self.attachments.map { att -> PansClawChatAttachmentPayload in
-            PansClawChatAttachmentPayload(
+        let encodedAttachments = self.attachments.map { att -> OpenClawChatAttachmentPayload in
+            OpenClawChatAttachmentPayload(
                 type: att.type,
                 mimeType: att.mimeType,
                 fileName: att.fileName,
@@ -432,7 +526,7 @@ public final class PansClawChatViewModel {
         }
         for att in encodedAttachments {
             userContent.append(
-                PansClawChatMessageContent(
+                OpenClawChatMessageContent(
                     type: att.type,
                     text: nil,
                     thinking: nil,
@@ -445,7 +539,7 @@ public final class PansClawChatViewModel {
                     arguments: nil))
         }
         self.messages.append(
-            PansClawChatMessage(
+            OpenClawChatMessage(
                 id: UUID(),
                 role: "user",
                 content: userContent,
@@ -535,6 +629,42 @@ public final class PansClawChatViewModel {
             return
         }
 
+        await self.bootstrap()
+    }
+
+    private func performCompact() async {
+        guard !self.isCompacting else { return }
+        guard !self.isSending, self.pendingRuns.isEmpty, !self.isAborting else {
+            self.errorText = "Wait for the current response before compacting the session."
+            return
+        }
+        if let lastCompactAt,
+           Date().timeIntervalSince(lastCompactAt) < self.compactCooldown
+        {
+            self.errorText = "Please wait before compacting this session again."
+            return
+        }
+
+        self.isCompacting = true
+        self.isLoading = true
+        self.errorText = nil
+        defer {
+            self.isLoading = false
+            self.isCompacting = false
+        }
+
+        do {
+            try await self.transport.compactSession(sessionKey: self.sessionKey)
+        } catch {
+            self.errorText = "Unable to compact the session. Please try again."
+            let nsError = error as NSError
+            chatUILogger.error(
+                "session compact failed domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) details=\(String(describing: error), privacy: .private)"
+            )
+            return
+        }
+
+        self.lastCompactAt = Date()
         await self.bootstrap()
     }
 
@@ -636,8 +766,8 @@ public final class PansClawChatViewModel {
         }
     }
 
-    private func placeholderSession(key: String) -> PansClawChatSessionEntry {
-        PansClawChatSessionEntry(
+    private func placeholderSession(key: String) -> OpenClawChatSessionEntry {
+        OpenClawChatSessionEntry(
             key: key,
             kind: nil,
             displayName: nil,
@@ -758,7 +888,7 @@ public final class PansClawChatViewModel {
     {
         if let index = self.sessions.firstIndex(where: { $0.key == sessionKey }) {
             let current = self.sessions[index]
-            self.sessions[index] = PansClawChatSessionEntry(
+            self.sessions[index] = OpenClawChatSessionEntry(
                 key: current.key,
                 kind: current.kind,
                 displayName: current.displayName,
@@ -781,7 +911,7 @@ public final class PansClawChatViewModel {
         } else {
             let placeholder = self.placeholderSession(key: sessionKey)
             self.sessions.append(
-                PansClawChatSessionEntry(
+                OpenClawChatSessionEntry(
                     key: placeholder.key,
                     kind: placeholder.kind,
                     displayName: placeholder.displayName,
@@ -807,7 +937,7 @@ public final class PansClawChatViewModel {
         }
     }
 
-    private func handleTransportEvent(_ evt: PansClawChatTransportEvent) {
+    private func handleTransportEvent(_ evt: OpenClawChatTransportEvent) {
         switch evt {
         case let .health(ok):
             self.healthOK = ok
@@ -827,7 +957,7 @@ public final class PansClawChatViewModel {
         }
     }
 
-    private func handleChatEvent(_ chat: PansClawChatEventPayload) {
+    private func handleChatEvent(_ chat: OpenClawChatEventPayload) {
         let isOurRun = chat.runId.flatMap { self.pendingRuns.contains($0) } ?? false
 
         // Gateway may publish canonical session keys (for example "agent:main:main")
@@ -886,7 +1016,7 @@ public final class PansClawChatViewModel {
         return false
     }
 
-    private func handleAgentEvent(_ evt: PansClawAgentEventPayload) {
+    private func handleAgentEvent(_ evt: OpenClawAgentEventPayload) {
         if let sessionId, evt.runId != sessionId {
             return
         }
@@ -902,7 +1032,7 @@ public final class PansClawChatViewModel {
             guard let toolCallId = evt.data["toolCallId"]?.value as? String else { return }
             if phase == "start" {
                 let args = evt.data["args"]
-                self.pendingToolCallsById[toolCallId] = PansClawChatPendingToolCall(
+                self.pendingToolCallsById[toolCallId] = OpenClawChatPendingToolCall(
                     toolCallId: toolCallId,
                     name: name,
                     args: args,
@@ -919,7 +1049,7 @@ public final class PansClawChatViewModel {
     private func refreshHistoryAfterRun() async {
         do {
             let payload = try await self.transport.requestHistory(sessionKey: self.sessionKey)
-            self.messages = Self.reconcileMessageIDs(
+            self.messages = Self.reconcileRunRefreshMessages(
                 previous: self.messages,
                 incoming: Self.decodeMessages(payload.messages ?? []))
             self.sessionId = payload.sessionId
@@ -1017,7 +1147,7 @@ public final class PansClawChatViewModel {
 
         let preview = Self.previewImage(data: data)
         self.attachments.append(
-            PansClawPendingAttachment(
+            OpenClawPendingAttachment(
                 url: url,
                 data: data,
                 fileName: fileName,
@@ -1025,7 +1155,7 @@ public final class PansClawChatViewModel {
                 preview: preview))
     }
 
-    private static func previewImage(data: Data) -> PansClawPlatformImage? {
+    private static func previewImage(data: Data) -> OpenClawPlatformImage? {
         #if canImport(AppKit)
         NSImage(data: data)
         #elseif canImport(UIKit)

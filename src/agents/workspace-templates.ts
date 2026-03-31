@@ -3,10 +3,15 @@ import { fileURLToPath } from "node:url";
 import { resolveOpenClawPackageRoot } from "../infra/openclaw-root.js";
 import { pathExists } from "../utils.js";
 
-const FALLBACK_TEMPLATE_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../docs/reference/templates",
-);
+const _thisDir = path.dirname(fileURLToPath(import.meta.url));
+// When compiled as a flat bundle (dist/bundle.js), one "../" reaches the project root.
+// When compiled to a nested path (dist/agents/workspace-templates.js), two "../" are needed.
+// Include both so either layout works.
+const FALLBACK_TEMPLATE_DIRS = [
+  path.resolve(_thisDir, "../docs/reference/templates"),
+  path.resolve(_thisDir, "../../docs/reference/templates"),
+];
+const FALLBACK_TEMPLATE_DIR = FALLBACK_TEMPLATE_DIRS[0];
 
 let cachedTemplateDir: string | undefined;
 let resolvingTemplateDir: Promise<string> | undefined;
@@ -32,7 +37,7 @@ export async function resolveWorkspaceTemplateDir(opts?: {
     const candidates = [
       packageRoot ? path.join(packageRoot, "docs", "reference", "templates") : null,
       cwd ? path.resolve(cwd, "docs", "reference", "templates") : null,
-      FALLBACK_TEMPLATE_DIR,
+      ...FALLBACK_TEMPLATE_DIRS,
     ].filter(Boolean) as string[];
 
     for (const candidate of candidates) {

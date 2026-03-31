@@ -5,7 +5,13 @@ import { t } from "../i18n/index.ts";
 import { refreshChat } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import type { AppViewState } from "./app-view-state.ts";
-import { PansClawApp } from "./app.ts";
+import { OpenClawApp } from "./app.ts";
+import { createChatModelOverride } from "./chat-model-ref.ts";
+import {
+  resolveChatModelOverrideValue,
+  resolveChatModelSelectState,
+} from "./chat-model-select-state.ts";
+import { refreshVisibleToolsEffectiveForCurrentSession } from "./controllers/agents.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { icons } from "./icons.ts";
@@ -103,25 +109,23 @@ function renderCronFilterIcon(hiddenCount: number) {
         <circle cx="12" cy="12" r="10"></circle>
         <polyline points="12 6 12 12 16 14"></polyline>
       </svg>
-      ${
-        hiddenCount > 0
-          ? html`<span
+      ${hiddenCount > 0
+        ? html`<span
             style="
               position: absolute;
               top: -5px;
               right: -6px;
               background: var(--color-accent, #6366f1);
               color: #fff;
-              border-radius: 999px;
+              border-radius: var(--radius-full);
               font-size: 9px;
               line-height: 1;
               padding: 1px 3px;
               pointer-events: none;
             "
-          >${hiddenCount}</span
+            >${hiddenCount}</span
           >`
-          : ""
-      }
+        : ""}
     </span>
   `;
 }
@@ -169,9 +173,7 @@ export function renderChatSessionSelect(state: AppViewState) {
                   group.options,
                   (entry) => entry.key,
                   (entry) =>
-                    html`<option value=${entry.key} title=${entry.title}>
-                      ${entry.label}
-                    </option>`,
+                    html`<option value=${entry.key} title=${entry.title}>${entry.label}</option>`,
                 )}
               </optgroup>`,
           )}
@@ -325,13 +327,11 @@ export function renderChatControls(state: AppViewState) {
           state.sessionsHideCron = !hideCron;
         }}
         aria-pressed=${hideCron}
-        title=${
-          hideCron
-            ? hiddenCronCount > 0
-              ? t("chat.showCronSessionsHidden", { count: String(hiddenCronCount) })
-              : t("chat.showCronSessions")
-            : t("chat.hideCronSessions")
-        }
+        title=${hideCron
+          ? hiddenCronCount > 0
+            ? t("chat.showCronSessionsHidden", { count: String(hiddenCronCount) })
+            : t("chat.showCronSessions")
+          : t("chat.hideCronSessions")}
       >
         ${renderCronFilterIcon(hiddenCronCount)}
       </button>
@@ -408,14 +408,28 @@ export function renderChatMobileToggle(state: AppViewState) {
         title="Chat settings"
         aria-label="Chat settings"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          ></path>
         </svg>
       </button>
-      <div class="chat-controls-dropdown" @click=${(e: Event) => {
-        e.stopPropagation();
-      }}>
+      <div
+        class="chat-controls-dropdown"
+        @click=${(e: Event) => {
+          e.stopPropagation();
+        }}
+      >
         <div class="chat-controls">
           <label class="field chat-controls__session">
             <select
@@ -430,9 +444,7 @@ export function renderChatMobileToggle(state: AppViewState) {
                   <optgroup label=${group.label}>
                     ${group.options.map(
                       (opt) => html`
-                        <option value=${opt.key} title=${opt.title}>
-                          ${opt.label}
-                        </option>
+                        <option value=${opt.key} title=${opt.title}>${opt.label}</option>
                       `,
                     )}
                   </optgroup>
@@ -496,7 +508,7 @@ export function renderChatMobileToggle(state: AppViewState) {
   `;
 }
 
-function switchChatSession(state: AppViewState, nextSessionKey: string) {
+export function switchChatSession(state: AppViewState, nextSessionKey: string) {
   state.sessionKey = nextSessionKey;
   state.chatMessage = "";
   state.chatStream = null;
@@ -528,6 +540,67 @@ async function refreshSessionOptions(state: AppViewState) {
     includeGlobal: true,
     includeUnknown: true,
   });
+}
+
+function renderChatModelSelect(state: AppViewState) {
+  const { currentOverride, defaultLabel, options } = resolveChatModelSelectState(state);
+  const busy =
+    state.chatLoading || state.chatSending || Boolean(state.chatRunId) || state.chatStream !== null;
+  const disabled =
+    !state.connected || busy || (state.chatModelsLoading && options.length === 0) || !state.client;
+  return html`
+    <label class="field chat-controls__session chat-controls__model">
+      <select
+        data-chat-model-select="true"
+        aria-label="Chat model"
+        ?disabled=${disabled}
+        @change=${async (e: Event) => {
+          const next = (e.target as HTMLSelectElement).value.trim();
+          await switchChatModel(state, next);
+        }}
+      >
+        <option value="" ?selected=${currentOverride === ""}>${defaultLabel}</option>
+        ${repeat(
+          options,
+          (entry) => entry.value,
+          (entry) =>
+            html`<option value=${entry.value} ?selected=${entry.value === currentOverride}>
+              ${entry.label}
+            </option>`,
+        )}
+      </select>
+    </label>
+  `;
+}
+
+async function switchChatModel(state: AppViewState, nextModel: string) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  const currentOverride = resolveChatModelOverrideValue(state);
+  if (currentOverride === nextModel) {
+    return;
+  }
+  const targetSessionKey = state.sessionKey;
+  const prevOverride = state.chatModelOverrides[targetSessionKey];
+  state.lastError = null;
+  // Write the override cache immediately so the picker stays in sync during the RPC round-trip.
+  state.chatModelOverrides = {
+    ...state.chatModelOverrides,
+    [targetSessionKey]: createChatModelOverride(nextModel),
+  };
+  try {
+    await state.client.request("sessions.patch", {
+      key: targetSessionKey,
+      model: nextModel || null,
+    });
+    void refreshVisibleToolsEffectiveForCurrentSession(state);
+    await refreshSessionOptions(state);
+  } catch (err) {
+    // Roll back so the picker reflects the actual server model.
+    state.chatModelOverrides = { ...state.chatModelOverrides, [targetSessionKey]: prevOverride };
+    state.lastError = `Failed to set model: ${String(err)}`;
+  }
 }
 
 /* ── Channel display labels ────────────────────────────── */
@@ -738,6 +811,70 @@ export function resolveSessionOptionGroups(
     }
   }
 
+  const allOptions = Array.from(groups.values()).flatMap((group) =>
+    group.options.map((option) => ({ groupLabel: group.label, option })),
+  );
+  const labels = new Map(allOptions.map(({ option }) => [option, option.label]));
+  const countAssignedLabels = () => {
+    const counts = new Map<string, number>();
+    for (const { option } of allOptions) {
+      const label = labels.get(option) ?? option.label;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const labelIncludesScopeLabel = (label: string, scopeLabel: string) => {
+    const trimmedScope = scopeLabel.trim();
+    if (!trimmedScope) {
+      return false;
+    }
+    return (
+      label === trimmedScope ||
+      label.endsWith(` · ${trimmedScope}`) ||
+      label.endsWith(` / ${trimmedScope}`)
+    );
+  };
+
+  const globalCounts = countAssignedLabels();
+  for (const { groupLabel, option } of allOptions) {
+    const currentLabel = labels.get(option) ?? option.label;
+    if ((globalCounts.get(currentLabel) ?? 0) <= 1) {
+      continue;
+    }
+    const scopedPrefix = `${groupLabel} / `;
+    if (currentLabel.startsWith(scopedPrefix)) {
+      continue;
+    }
+    // Keep the agent visible once the native select collapses to a single chosen label.
+    labels.set(option, `${groupLabel} / ${currentLabel}`);
+  }
+
+  const scopedCounts = countAssignedLabels();
+  for (const { option } of allOptions) {
+    const currentLabel = labels.get(option) ?? option.label;
+    if ((scopedCounts.get(currentLabel) ?? 0) <= 1) {
+      continue;
+    }
+    if (labelIncludesScopeLabel(currentLabel, option.scopeLabel)) {
+      continue;
+    }
+    labels.set(option, `${currentLabel} · ${option.scopeLabel}`);
+  }
+
+  const finalCounts = countAssignedLabels();
+  for (const { option } of allOptions) {
+    const currentLabel = labels.get(option) ?? option.label;
+    if ((finalCounts.get(currentLabel) ?? 0) <= 1) {
+      continue;
+    }
+    // Fall back to the full key only when every friendlier disambiguator still collides.
+    labels.set(option, `${currentLabel} · ${option.key}`);
+  }
+
+  for (const { option } of allOptions) {
+    option.label = labels.get(option) ?? option.label;
+  }
+
   return Array.from(groups.values());
 }
 
@@ -820,7 +957,9 @@ export function renderTopbarThemeModeToggle(state: AppViewState) {
         (opt) => html`
           <button
             type="button"
-            class="topbar-theme-mode__btn ${opt.id === state.themeMode ? "topbar-theme-mode__btn--active" : ""}"
+            class="topbar-theme-mode__btn ${opt.id === state.themeMode
+              ? "topbar-theme-mode__btn--active"
+              : ""}"
             title=${opt.label}
             aria-label="Color mode: ${opt.label}"
             aria-pressed=${opt.id === state.themeMode}
@@ -904,19 +1043,22 @@ export function renderThemeToggle(state: AppViewState) {
         aria-haspopup="menu"
         aria-expanded="false"
         @click=${toggleOpen}
-      >${currentThemeIcon(state.theme)}</button>
+      >
+        ${currentThemeIcon(state.theme)}
+      </button>
       <div class="theme-orb__menu" role="menu" aria-hidden="true">
         ${THEME_OPTIONS.map(
-          (opt) => html`
-            <button
-              type="button"
-              class="theme-orb__option ${opt.id === state.theme ? "theme-orb__option--active" : ""}"
-              title=${opt.label}
-              role="menuitemradio"
-              aria-checked=${opt.id === state.theme}
-              aria-label=${opt.label}
-              @click=${(e: Event) => pick(opt, e)}
-            >${opt.icon}</button>`,
+          (opt) => html` <button
+            type="button"
+            class="theme-orb__option ${opt.id === state.theme ? "theme-orb__option--active" : ""}"
+            title=${opt.label}
+            role="menuitemradio"
+            aria-checked=${opt.id === state.theme}
+            aria-label=${opt.label}
+            @click=${(e: Event) => pick(opt, e)}
+          >
+            ${opt.icon}
+          </button>`,
         )}
       </div>
     </div>

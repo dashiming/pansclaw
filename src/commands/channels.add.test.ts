@@ -1,17 +1,26 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelPluginCatalogEntry } from "../channels/plugins/catalog.js";
+import type { ChannelPlugin } from "../channels/plugins/types.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createChannelTestPluginBase, createTestRegistry } from "../test-utils/channel-plugins.js";
+import {
+  ensureChannelSetupPluginInstalled,
+  loadChannelSetupPluginRegistrySnapshotForChannel,
+} from "./channel-setup/plugin-install.js";
 import { setDefaultChannelPluginRegistryForTests } from "./channel-test-helpers.js";
 import { configMocks, offsetMocks } from "./channels.mock-harness.js";
 import {
-  ensureOnboardingPluginInstalled,
-  loadOnboardingPluginRegistrySnapshotForChannel,
-} from "./onboarding/plugin-install.js";
+  createMSTeamsCatalogEntry,
+  createMSTeamsSetupPlugin,
+} from "./channels.plugin-install.test-helpers.js";
 import { baseConfigSnapshot, createTestRuntime } from "./test-runtime-config-helpers.js";
 
 const catalogMocks = vi.hoisted(() => ({
   listChannelPluginCatalogEntries: vi.fn((): ChannelPluginCatalogEntry[] => []),
+}));
+
+const manifestRegistryMocks = vi.hoisted(() => ({
+  loadPluginManifestRegistry: vi.fn(() => ({ plugins: [], diagnostics: [] })),
 }));
 
 vi.mock("../channels/plugins/catalog.js", async (importOriginal) => {
@@ -22,17 +31,72 @@ vi.mock("../channels/plugins/catalog.js", async (importOriginal) => {
   };
 });
 
-vi.mock("./onboarding/plugin-install.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./onboarding/plugin-install.js")>();
+vi.mock("../plugins/manifest-registry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../plugins/manifest-registry.js")>();
   return {
     ...actual,
-    ensureOnboardingPluginInstalled: vi.fn(async ({ cfg }) => ({ cfg, installed: true })),
-    loadOnboardingPluginRegistrySnapshotForChannel: vi.fn(() => createTestRegistry()),
+    loadPluginManifestRegistry: manifestRegistryMocks.loadPluginManifestRegistry,
   };
+});
+
+vi.mock("./channel-setup/plugin-install.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./channel-setup/plugin-install.js")>();
+  const { createMockChannelSetupPluginInstallModule } =
+    await import("./channels.plugin-install.test-helpers.js");
+  return createMockChannelSetupPluginInstallModule(actual);
 });
 
 const runtime = createTestRuntime();
 let channelsAddCommand: typeof import("./channels.js").channelsAddCommand;
+
+function registerMSTeamsSetupPlugin(pluginId = "@openclaw/msteams-plugin"): void {
+  vi.mocked(loadChannelSetupPluginRegistrySnapshotForChannel).mockReturnValue(
+    createTestRegistry([{ pluginId, plugin: createMSTeamsSetupPlugin(), source: "test" }]),
+  );
+}
+
+type SignalAfterAccountConfigWritten = NonNullable<
+  NonNullable<ChannelPlugin["setup"]>["afterAccountConfigWritten"]
+>;
+
+function createSignalPlugin(
+  afterAccountConfigWritten: SignalAfterAccountConfigWritten,
+): ChannelPlugin {
+  return {
+    ...createChannelTestPluginBase({
+      id: "signal",
+      label: "Signal",
+    }),
+    setup: {
+      applyAccountConfig: ({ cfg, accountId, input }) => ({
+        ...cfg,
+        channels: {
+          ...cfg.channels,
+          signal: {
+            enabled: true,
+            accounts: {
+              [accountId]: {
+                signalNumber: input.signalNumber,
+              },
+            },
+          },
+        },
+      }),
+      afterAccountConfigWritten,
+    },
+  } as ChannelPlugin;
+}
+
+async function runSignalAddCommand(afterAccountConfigWritten: SignalAfterAccountConfigWritten) {
+  const plugin = createSignalPlugin(afterAccountConfigWritten);
+  setActivePluginRegistry(createTestRegistry([{ pluginId: "signal", plugin, source: "test" }]));
+  configMocks.readConfigFileSnapshot.mockResolvedValue({ ...baseConfigSnapshot });
+  await channelsAddCommand(
+    { channel: "signal", account: "ops", signalNumber: "+15550001" },
+    runtime,
+    { hasFlags: true },
+  );
+}
 
 describe("channelsAddCommand", () => {
   beforeAll(async () => {
@@ -48,13 +112,20 @@ describe("channelsAddCommand", () => {
     runtime.exit.mockClear();
     catalogMocks.listChannelPluginCatalogEntries.mockClear();
     catalogMocks.listChannelPluginCatalogEntries.mockReturnValue([]);
-    vi.mocked(ensureOnboardingPluginInstalled).mockClear();
-    vi.mocked(ensureOnboardingPluginInstalled).mockImplementation(async ({ cfg }) => ({
+    manifestRegistryMocks.loadPluginManifestRegistry.mockClear();
+    manifestRegistryMocks.loadPluginManifestRegistry.mockReturnValue({
+      plugins: [],
+      diagnostics: [],
+    });
+    vi.mocked(ensureChannelSetupPluginInstalled).mockClear();
+    vi.mocked(ensureChannelSetupPluginInstalled).mockImplementation(async ({ cfg }) => ({
       cfg,
       installed: true,
     }));
-    vi.mocked(loadOnboardingPluginRegistrySnapshotForChannel).mockClear();
-    vi.mocked(loadOnboardingPluginRegistrySnapshotForChannel).mockReturnValue(createTestRegistry());
+    vi.mocked(loadChannelSetupPluginRegistrySnapshotForChannel).mockClear();
+    vi.mocked(loadChannelSetupPluginRegistrySnapshotForChannel).mockReturnValue(
+      createTestRegistry(),
+    );
     setDefaultChannelPluginRegistryForTests();
   });
 
@@ -100,43 +171,9 @@ describe("channelsAddCommand", () => {
   it("falls back to a scoped snapshot after installing an external channel plugin", async () => {
     configMocks.readConfigFileSnapshot.mockResolvedValue({ ...baseConfigSnapshot });
     setActivePluginRegistry(createTestRegistry());
-    const catalogEntry: ChannelPluginCatalogEntry = {
-      id: "msteams",
-      pluginId: "@openclaw/msteams-plugin",
-      meta: {
-        id: "msteams",
-        label: "Microsoft Teams",
-        selectionLabel: "Microsoft Teams",
-        docsPath: "/channels/msteams",
-        blurb: "teams channel",
-      },
-      install: {
-        npmSpec: "@openclaw/msteams",
-      },
-    };
+    const catalogEntry = createMSTeamsCatalogEntry();
     catalogMocks.listChannelPluginCatalogEntries.mockReturnValue([catalogEntry]);
-    const scopedMSTeamsPlugin = {
-      ...createChannelTestPluginBase({
-        id: "msteams",
-        label: "Microsoft Teams",
-        docsPath: "/channels/msteams",
-      }),
-      setup: {
-        applyAccountConfig: vi.fn(({ cfg, input }) => ({
-          ...cfg,
-          channels: {
-            ...cfg.channels,
-            msteams: {
-              enabled: true,
-              tenantId: input.token,
-            },
-          },
-        })),
-      },
-    };
-    vi.mocked(loadOnboardingPluginRegistrySnapshotForChannel).mockReturnValue(
-      createTestRegistry([{ pluginId: "msteams", plugin: scopedMSTeamsPlugin, source: "test" }]),
-    );
+    registerMSTeamsSetupPlugin("msteams");
 
     await channelsAddCommand(
       {
@@ -148,10 +185,10 @@ describe("channelsAddCommand", () => {
       { hasFlags: true },
     );
 
-    expect(ensureOnboardingPluginInstalled).toHaveBeenCalledWith(
+    expect(ensureChannelSetupPluginInstalled).toHaveBeenCalledWith(
       expect.objectContaining({ entry: catalogEntry }),
     );
-    expect(loadOnboardingPluginRegistrySnapshotForChannel).toHaveBeenCalledWith(
+    expect(loadChannelSetupPluginRegistrySnapshotForChannel).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "msteams",
         pluginId: "@openclaw/msteams-plugin",
@@ -169,6 +206,51 @@ describe("channelsAddCommand", () => {
     );
     expect(runtime.error).not.toHaveBeenCalled();
     expect(runtime.exit).not.toHaveBeenCalled();
+  });
+
+  it("uses the installed external channel snapshot without reinstalling", async () => {
+    configMocks.readConfigFileSnapshot.mockResolvedValue({ ...baseConfigSnapshot });
+    setActivePluginRegistry(createTestRegistry());
+    const catalogEntry = createMSTeamsCatalogEntry();
+    catalogMocks.listChannelPluginCatalogEntries.mockReturnValue([catalogEntry]);
+    manifestRegistryMocks.loadPluginManifestRegistry.mockReturnValue({
+      plugins: [
+        {
+          id: "@openclaw/msteams-plugin",
+          channels: ["msteams"],
+        } as never,
+      ],
+      diagnostics: [],
+    });
+    registerMSTeamsSetupPlugin("msteams");
+
+    await channelsAddCommand(
+      {
+        channel: "msteams",
+        account: "default",
+        token: "tenant-installed",
+      },
+      runtime,
+      { hasFlags: true },
+    );
+
+    expect(ensureChannelSetupPluginInstalled).not.toHaveBeenCalled();
+    expect(loadChannelSetupPluginRegistrySnapshotForChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "msteams",
+        pluginId: "@openclaw/msteams-plugin",
+      }),
+    );
+    expect(configMocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channels: {
+          msteams: {
+            enabled: true,
+            tenantId: "tenant-installed",
+          },
+        },
+      }),
+    );
   });
 
   it("uses the installed plugin id when channel and plugin ids differ", async () => {
@@ -189,12 +271,12 @@ describe("channelsAddCommand", () => {
       },
     };
     catalogMocks.listChannelPluginCatalogEntries.mockReturnValue([catalogEntry]);
-    vi.mocked(ensureOnboardingPluginInstalled).mockImplementation(async ({ cfg }) => ({
+    vi.mocked(ensureChannelSetupPluginInstalled).mockImplementation(async ({ cfg }) => ({
       cfg,
       installed: true,
       pluginId: "@vendor/teams-runtime",
     }));
-    vi.mocked(loadOnboardingPluginRegistrySnapshotForChannel).mockReturnValue(
+    vi.mocked(loadChannelSetupPluginRegistrySnapshotForChannel).mockReturnValue(
       createTestRegistry([
         {
           pluginId: "@vendor/teams-runtime",
@@ -232,7 +314,7 @@ describe("channelsAddCommand", () => {
       { hasFlags: true },
     );
 
-    expect(loadOnboardingPluginRegistrySnapshotForChannel).toHaveBeenCalledWith(
+    expect(loadChannelSetupPluginRegistrySnapshotForChannel).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "msteams",
         pluginId: "@vendor/teams-runtime",
@@ -240,5 +322,47 @@ describe("channelsAddCommand", () => {
     );
     expect(runtime.error).not.toHaveBeenCalled();
     expect(runtime.exit).not.toHaveBeenCalled();
+  });
+
+  it("runs post-setup hooks after writing config", async () => {
+    const afterAccountConfigWritten = vi.fn().mockResolvedValue(undefined);
+    await runSignalAddCommand(afterAccountConfigWritten);
+
+    expect(configMocks.writeConfigFile).toHaveBeenCalledTimes(1);
+    expect(afterAccountConfigWritten).toHaveBeenCalledTimes(1);
+    expect(configMocks.writeConfigFile.mock.invocationCallOrder[0]).toBeLessThan(
+      afterAccountConfigWritten.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(afterAccountConfigWritten).toHaveBeenCalledWith({
+      previousCfg: baseConfigSnapshot.config,
+      cfg: expect.objectContaining({
+        channels: {
+          signal: {
+            enabled: true,
+            accounts: {
+              ops: {
+                signalNumber: "+15550001",
+              },
+            },
+          },
+        },
+      }),
+      accountId: "ops",
+      input: expect.objectContaining({
+        signalNumber: "+15550001",
+      }),
+      runtime,
+    });
+  });
+
+  it("keeps the saved config when a post-setup hook fails", async () => {
+    const afterAccountConfigWritten = vi.fn().mockRejectedValue(new Error("hook failed"));
+    await runSignalAddCommand(afterAccountConfigWritten);
+
+    expect(configMocks.writeConfigFile).toHaveBeenCalledTimes(1);
+    expect(runtime.exit).not.toHaveBeenCalled();
+    expect(runtime.error).toHaveBeenCalledWith(
+      'Channel signal post-setup warning for "ops": hook failed',
+    );
   });
 });

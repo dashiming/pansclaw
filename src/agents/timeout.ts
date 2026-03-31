@@ -1,6 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
 
-export const DEFAULT_AGENT_TIMEOUT_SECONDS = 1800;
+const DEFAULT_AGENT_TIMEOUT_SECONDS = 48 * 60 * 60;
 const MAX_SAFE_TIMEOUT_MS = 2_147_000_000;
 
 const normalizeNumber = (value: unknown): number | undefined =>

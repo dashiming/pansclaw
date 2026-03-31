@@ -1,8 +1,8 @@
 import { parseAgentSessionKey } from "../../../src/sessions/session-key-utils.js";
-import { scheduleChatScroll } from "./app-scroll.ts";
+import { scheduleChatScroll, resetChatScroll } from "./app-scroll.ts";
 import { setLastActiveSessionKey } from "./app-settings.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
-import type { PansClawApp } from "./app.ts";
+import type { OpenClawApp } from "./app.ts";
 import { executeSlashCommand } from "./chat/slash-command-executor.ts";
 import { parseSlashCommand } from "./chat/slash-commands.ts";
 import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
@@ -10,7 +10,7 @@ import { loadModels } from "./controllers/models.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import { normalizeBasePath } from "./navigation.ts";
-import type { ModelCatalogEntry } from "./types.ts";
+import type { ChatModelOverride, ModelCatalogEntry } from "./types.ts";
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
 import { generateUUID } from "./uuid.ts";
 
@@ -29,7 +29,7 @@ export type ChatHost = {
   basePath: string;
   hello: GatewayHelloOk | null;
   chatAvatarUrl: string | null;
-  chatModelOverrides: Record<string, string | null>;
+  chatModelOverrides: Record<string, ChatModelOverride | null>;
   chatModelsLoading: boolean;
   chatModelCatalog: ModelCatalogEntry[];
   updateComplete?: Promise<unknown>;
@@ -79,7 +79,7 @@ export async function handleAbortChat(host: ChatHost) {
     return;
   }
   host.chatMessage = "";
-  await abortChatRun(host as unknown as PansClawApp);
+  await abortChatRun(host as unknown as OpenClawApp);
 }
 
 function enqueueChatMessage(
@@ -121,7 +121,9 @@ async function sendChatMessageNow(
   },
 ) {
   resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
-  const runId = await sendChatMessage(host as unknown as PansClawApp, message, opts?.attachments);
+  // Reset scroll state before sending to ensure auto-scroll works for the response
+  resetChatScroll(host as unknown as Parameters<typeof resetChatScroll>[0]);
+  const runId = await sendChatMessage(host as unknown as OpenClawApp, message, opts?.attachments);
   const ok = Boolean(runId);
   if (!ok && opts?.previousDraft != null) {
     host.chatMessage = opts.previousDraft;
@@ -141,7 +143,8 @@ async function sendChatMessageNow(
   if (ok && opts?.restoreAttachments && opts.previousAttachments?.length) {
     host.chatAttachments = opts.previousAttachments;
   }
-  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
+  // Force scroll after sending to ensure viewport is at bottom for incoming stream
+  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0], true);
   if (ok && !host.chatRunId) {
     void flushChatQueue(host);
   }
@@ -212,14 +215,14 @@ export async function handleSendChat(
   // Intercept local slash commands (/status, /model, /compact, etc.)
   const parsed = parseSlashCommand(message);
   if (parsed?.command.executeLocal) {
-    if (isChatBusy(host) && shouldQueueLocalSlashCommand(parsed.command.name)) {
+    if (isChatBusy(host) && shouldQueueLocalSlashCommand(parsed.command.key)) {
       if (messageOverride == null) {
         host.chatMessage = "";
         host.chatAttachments = [];
       }
       enqueueChatMessage(host, message, undefined, isChatResetCommand(message), {
         args: parsed.args,
-        name: parsed.command.name,
+        name: parsed.command.key,
       });
       return;
     }
@@ -228,7 +231,7 @@ export async function handleSendChat(
       host.chatMessage = "";
       host.chatAttachments = [];
     }
-    await dispatchSlashCommand(host, parsed.command.name, parsed.args, {
+    await dispatchSlashCommand(host, parsed.command.key, parsed.args, {
       previousDraft: prevDraft,
       restoreDraft: Boolean(messageOverride && opts?.restoreDraft),
     });
@@ -257,7 +260,7 @@ export async function handleSendChat(
 }
 
 function shouldQueueLocalSlashCommand(name: string): boolean {
-  return !["stop", "focus", "export"].includes(name);
+  return !["stop", "focus", "export-session"].includes(name);
 }
 
 // ── Slash Command Dispatch ──
@@ -292,7 +295,7 @@ async function dispatchSlashCommand(
     case "focus":
       host.onSlashAction?.("toggle-focus");
       return;
-    case "export":
+    case "export-session":
       host.onSlashAction?.("export");
       return;
   }
@@ -302,17 +305,20 @@ async function dispatchSlashCommand(
   }
 
   const targetSessionKey = host.sessionKey;
-  const result = await executeSlashCommand(host.client, targetSessionKey, name, args);
+  const result = await executeSlashCommand(host.client, targetSessionKey, name, args, {
+    chatModelCatalog: host.chatModelCatalog,
+  });
 
   if (result.content) {
     injectCommandResult(host, result.content);
   }
 
-  if (result.sessionPatch && "model" in result.sessionPatch) {
+  if (result.sessionPatch && "modelOverride" in result.sessionPatch) {
     host.chatModelOverrides = {
       ...host.chatModelOverrides,
-      [targetSessionKey]: result.sessionPatch.model ?? null,
+      [targetSessionKey]: result.sessionPatch.modelOverride ?? null,
     };
+    host.onSlashAction?.("refresh-tools-effective");
   }
 
   if (result.action === "refresh") {
@@ -331,7 +337,7 @@ async function clearChatHistory(host: ChatHost) {
     host.chatMessages = [];
     host.chatStream = null;
     host.chatRunId = null;
-    await loadChatHistory(host as unknown as PansClawApp);
+    await loadChatHistory(host as unknown as OpenClawApp);
   } catch (err) {
     host.lastError = String(err);
   }
@@ -351,8 +357,8 @@ function injectCommandResult(host: ChatHost, content: string) {
 
 export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: boolean }) {
   await Promise.all([
-    loadChatHistory(host as unknown as PansClawApp),
-    loadSessions(host as unknown as PansClawApp, {
+    loadChatHistory(host as unknown as OpenClawApp),
+    loadSessions(host as unknown as OpenClawApp, {
       activeMinutes: 0,
       limit: 0,
       includeGlobal: true,

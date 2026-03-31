@@ -22,6 +22,7 @@ import type {
   HealthSummary,
   LogEntry,
   LogLevel,
+  ChatModelOverride,
   ModelCatalogEntry,
   NostrProfile,
   PresenceEntry,
@@ -72,7 +73,7 @@ export type AppViewState = {
   fallbackStatus: FallbackStatus | null;
   chatAvatarUrl: string | null;
   chatThinkingLevel: string | null;
-  chatModelOverrides: Record<string, string | null>;
+  chatModelOverrides: Record<string, ChatModelOverride | null>;
   chatModelsLoading: boolean;
   chatModelCatalog: ModelCatalogEntry[];
   chatQueue: ChatQueueItem[];
@@ -188,6 +189,11 @@ export type AppViewState = {
   toolsCatalogLoading: boolean;
   toolsCatalogError: string | null;
   toolsCatalogResult: ToolsCatalogResult | null;
+  toolsEffectiveLoading: boolean;
+  toolsEffectiveLoadingKey: string | null;
+  toolsEffectiveResultKey: string | null;
+  toolsEffectiveError: string | null;
+  toolsEffectiveResult: import("./types.js").ToolsEffectiveResult | null;
   agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   agentFilesLoading: boolean;
   agentFilesError: string | null;
@@ -216,7 +222,7 @@ export type AppViewState = {
   sessionsSortDir: "asc" | "desc";
   sessionsPage: number;
   sessionsPageSize: number;
-  sessionsActionsOpenKey: string | null;
+  sessionsSelectedKeys: Set<string>;
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;
@@ -292,9 +298,11 @@ export type AppViewState = {
     skillsReport: SkillStatusReport | null;
     skillsError: string | null;
     skillsFilter: string;
+    skillsStatusFilter: "all" | "ready" | "needs-setup" | "disabled";
     skillEdits: Record<string, string>;
     skillMessages: Record<string, SkillMessage>;
     skillsBusyKey: string | null;
+    skillsDetailKey: string | null;
     healthLoading: boolean;
     healthResult: HealthSummary | null;
     healthError: string | null;
@@ -336,6 +344,7 @@ export type AppViewState = {
     setTab: (tab: Tab) => void;
     setTheme: (theme: ThemeName, context?: ThemeTransitionContext) => void;
     setThemeMode: (mode: ThemeMode, context?: ThemeTransitionContext) => void;
+    setBorderRadius: (value: number) => void;
     applySettings: (next: UiSettings) => void;
     loadOverview: () => Promise<void>;
     loadAssistantIdentity: () => Promise<void>;
@@ -381,7 +390,6 @@ export type AppViewState = {
     handleDebugCall: () => Promise<void>;
     handleRunUpdate: () => Promise<void>;
     setPassword: (next: string) => void;
-    setSessionKey: (next: string) => void;
     setChatMessage: (next: string) => void;
     handleSendChat: (messageOverride?: string, opts?: { restoreDraft?: boolean }) => Promise<void>;
     handleAbortChat: () => Promise<void>;

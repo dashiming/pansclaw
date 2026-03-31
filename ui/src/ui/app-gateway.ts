@@ -11,7 +11,7 @@ import {
   setLastActiveSessionKey,
 } from "./app-settings.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
-import type { PansClawApp } from "./app.ts";
+import type { OpenClawApp } from "./app.ts";
 import { shouldReloadHistoryForFinalEvent } from "./chat-event-reload.ts";
 import { formatConnectError } from "./connect-error.ts";
 import { loadAgents } from "./controllers/agents.ts";
@@ -24,11 +24,12 @@ import {
   addExecApproval,
   parseExecApprovalRequested,
   parseExecApprovalResolved,
+  parsePluginApprovalRequested,
   removeExecApproval,
 } from "./controllers/exec-approval.ts";
 import { loadHealthState } from "./controllers/health.ts";
 import { loadNodes } from "./controllers/nodes.ts";
-import { loadSessions } from "./controllers/sessions.ts";
+import { loadSessions, subscribeSessions } from "./controllers/sessions.ts";
 import {
   resolveGatewayErrorDetailCode,
   type GatewayEventFrame,
@@ -213,11 +214,12 @@ export function connectGateway(host: GatewayHost) {
       (host as unknown as { chatStream: string | null }).chatStream = null;
       (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
       resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
-      void loadAssistantIdentity(host as unknown as PansClawApp);
-      void loadAgents(host as unknown as PansClawApp);
-      void loadHealthState(host as unknown as PansClawApp);
-      void loadNodes(host as unknown as PansClawApp, { quiet: true });
-      void loadDevices(host as unknown as PansClawApp, { quiet: true });
+      void subscribeSessions(host as unknown as OpenClawApp);
+      void loadAssistantIdentity(host as unknown as OpenClawApp);
+      void loadAgents(host as unknown as OpenClawApp);
+      void loadHealthState(host as unknown as OpenClawApp);
+      void loadNodes(host as unknown as OpenClawApp, { quiet: true });
+      void loadDevices(host as unknown as OpenClawApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason, error }) => {
@@ -292,7 +294,7 @@ function handleTerminalChatEvent(
   if (runId && host.refreshSessionsAfterChat.has(runId)) {
     host.refreshSessionsAfterChat.delete(runId);
     if (state === "final") {
-      void loadSessions(host as unknown as PansClawApp, {
+      void loadSessions(host as unknown as OpenClawApp, {
         activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
       });
     }
@@ -300,7 +302,7 @@ function handleTerminalChatEvent(
   // Reload history when tools were used so the persisted tool results
   // replace the now-cleared streaming state.
   if (hadToolEvents && state === "final") {
-    void loadChatHistory(host as unknown as PansClawApp);
+    void loadChatHistory(host as unknown as OpenClawApp);
     return true;
   }
   return false;
@@ -313,10 +315,10 @@ function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | u
       payload.sessionKey,
     );
   }
-  const state = handleChatEvent(host as unknown as PansClawApp, payload);
+  const state = handleChatEvent(host as unknown as OpenClawApp, payload);
   const historyReloaded = handleTerminalChatEvent(host, payload, state);
   if (state === "final" && !historyReloaded && shouldReloadHistoryForFinalEvent(payload)) {
-    void loadChatHistory(host as unknown as PansClawApp);
+    void loadChatHistory(host as unknown as OpenClawApp);
   }
 }
 
@@ -371,12 +373,17 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
+  if (evt.event === "sessions.changed") {
+    void loadSessions(host as unknown as OpenClawApp);
+    return;
+  }
+
   if (evt.event === "cron" && host.tab === "cron") {
     void loadCron(host as unknown as Parameters<typeof loadCron>[0]);
   }
 
   if (evt.event === "device.pair.requested" || evt.event === "device.pair.resolved") {
-    void loadDevices(host as unknown as PansClawApp, { quiet: true });
+    void loadDevices(host as unknown as OpenClawApp, { quiet: true });
   }
 
   if (evt.event === "exec.approval.requested") {
@@ -393,6 +400,27 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
   }
 
   if (evt.event === "exec.approval.resolved") {
+    const resolved = parseExecApprovalResolved(evt.payload);
+    if (resolved) {
+      host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, resolved.id);
+    }
+    return;
+  }
+
+  if (evt.event === "plugin.approval.requested") {
+    const entry = parsePluginApprovalRequested(evt.payload);
+    if (entry) {
+      host.execApprovalQueue = addExecApproval(host.execApprovalQueue, entry);
+      host.execApprovalError = null;
+      const delay = Math.max(0, entry.expiresAtMs - Date.now() + 500);
+      window.setTimeout(() => {
+        host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, entry.id);
+      }, delay);
+    }
+    return;
+  }
+
+  if (evt.event === "plugin.approval.resolved") {
     const resolved = parseExecApprovalResolved(evt.payload);
     if (resolved) {
       host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, resolved.id);

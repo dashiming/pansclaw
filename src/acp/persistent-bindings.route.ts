@@ -1,27 +1,22 @@
 import type { OpenClawConfig } from "../config/config.js";
-import type { ResolvedAgentRoute } from "../routing/resolve-route.js";
-import { deriveLastRoutePolicy } from "../routing/resolve-route.js";
+import { deriveLastRoutePolicy, type ResolvedAgentRoute } from "../routing/resolve-route.js";
 import { resolveAgentIdFromSessionKey } from "../routing/session-key.js";
-import {
-  ensureConfiguredAcpBindingSession,
-  resolveConfiguredAcpBindingRecord,
-  type ConfiguredAcpBindingChannel,
-  type ResolvedConfiguredAcpBinding,
-} from "./persistent-bindings.js";
+import { ensureConfiguredAcpBindingReady } from "./persistent-bindings.lifecycle.js";
+import { resolveConfiguredAcpBindingRecord } from "./persistent-bindings.resolve.js";
+import { buildConfiguredAcpSessionKey } from "./persistent-bindings.types.js";
 
 export function resolveConfiguredAcpRoute(params: {
   cfg: OpenClawConfig;
   route: ResolvedAgentRoute;
-  channel: ConfiguredAcpBindingChannel;
+  channel: string;
   accountId: string;
   conversationId: string;
   parentConversationId?: string;
 }): {
-  configuredBinding: ResolvedConfiguredAcpBinding | null;
   route: ResolvedAgentRoute;
-  boundSessionKey?: string;
-  boundAgentId?: string;
-} {
+  configuredBinding: NonNullable<ReturnType<typeof resolveConfiguredAcpBindingRecord>>;
+  boundSessionKey: string;
+} | null {
   const configuredBinding = resolveConfiguredAcpBindingRecord({
     cfg: params.cfg,
     channel: params.channel,
@@ -30,52 +25,34 @@ export function resolveConfiguredAcpRoute(params: {
     parentConversationId: params.parentConversationId,
   });
   if (!configuredBinding) {
-    return {
-      configuredBinding: null,
-      route: params.route,
-    };
+    return null;
   }
-  const boundSessionKey = configuredBinding.record.targetSessionKey?.trim() ?? "";
-  if (!boundSessionKey) {
-    return {
-      configuredBinding,
-      route: params.route,
-    };
-  }
-  const boundAgentId = resolveAgentIdFromSessionKey(boundSessionKey) || params.route.agentId;
+
+  const boundSessionKey = buildConfiguredAcpSessionKey(configuredBinding.spec);
+  const route: ResolvedAgentRoute = {
+    ...params.route,
+    sessionKey: boundSessionKey,
+    agentId: resolveAgentIdFromSessionKey(boundSessionKey),
+    lastRoutePolicy: deriveLastRoutePolicy({
+      sessionKey: boundSessionKey,
+      mainSessionKey: params.route.mainSessionKey,
+    }),
+    matchedBy: "binding.channel",
+  };
+
   return {
+    route,
     configuredBinding,
     boundSessionKey,
-    boundAgentId,
-    route: {
-      ...params.route,
-      sessionKey: boundSessionKey,
-      agentId: boundAgentId,
-      lastRoutePolicy: deriveLastRoutePolicy({
-        sessionKey: boundSessionKey,
-        mainSessionKey: params.route.mainSessionKey,
-      }),
-      matchedBy: "binding.channel",
-    },
   };
 }
 
 export async function ensureConfiguredAcpRouteReady(params: {
   cfg: OpenClawConfig;
-  configuredBinding: ResolvedConfiguredAcpBinding | null;
+  configuredBinding: NonNullable<ReturnType<typeof resolveConfiguredAcpBindingRecord>>;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!params.configuredBinding) {
-    return { ok: true };
-  }
-  const ensured = await ensureConfiguredAcpBindingSession({
+  return await ensureConfiguredAcpBindingReady({
     cfg: params.cfg,
-    spec: params.configuredBinding.spec,
+    configuredBinding: params.configuredBinding,
   });
-  if (ensured.ok) {
-    return { ok: true };
-  }
-  return {
-    ok: false,
-    error: ensured.error ?? "unknown error",
-  };
 }

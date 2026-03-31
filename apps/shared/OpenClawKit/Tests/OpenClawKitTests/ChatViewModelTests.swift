@@ -1,7 +1,7 @@
-import PansClawKit
+import OpenClawKit
 import Foundation
 import Testing
-@testable import PansClawChatUI
+@testable import OpenClawChatUI
 
 private func chatTextMessage(role: String, text: String, timestamp: Double) -> AnyCodable {
     AnyCodable([
@@ -14,17 +14,17 @@ private func chatTextMessage(role: String, text: String, timestamp: Double) -> A
 private func historyPayload(
     sessionKey: String = "main",
     sessionId: String? = "sess-main",
-    messages: [AnyCodable] = []) -> PansClawChatHistoryPayload
+    messages: [AnyCodable] = []) -> OpenClawChatHistoryPayload
 {
-    PansClawChatHistoryPayload(
+    OpenClawChatHistoryPayload(
         sessionKey: sessionKey,
         sessionId: sessionId,
         messages: messages,
         thinkingLevel: "off")
 }
 
-private func sessionEntry(key: String, updatedAt: Double) -> PansClawChatSessionEntry {
-    PansClawChatSessionEntry(
+private func sessionEntry(key: String, updatedAt: Double) -> OpenClawChatSessionEntry {
+    OpenClawChatSessionEntry(
         key: key,
         kind: nil,
         displayName: nil,
@@ -50,9 +50,9 @@ private func sessionEntry(
     key: String,
     updatedAt: Double,
     model: String?,
-    modelProvider: String? = nil) -> PansClawChatSessionEntry
+    modelProvider: String? = nil) -> OpenClawChatSessionEntry
 {
-    PansClawChatSessionEntry(
+    OpenClawChatSessionEntry(
         key: key,
         kind: nil,
         displayName: nil,
@@ -74,31 +74,33 @@ private func sessionEntry(
         contextTokens: nil)
 }
 
-private func modelChoice(id: String, name: String, provider: String = "anthropic") -> PansClawChatModelChoice {
-    PansClawChatModelChoice(modelID: id, name: name, provider: provider, contextWindow: nil)
+private func modelChoice(id: String, name: String, provider: String = "anthropic") -> OpenClawChatModelChoice {
+    OpenClawChatModelChoice(modelID: id, name: name, provider: provider, contextWindow: nil)
 }
 
 private func makeViewModel(
     sessionKey: String = "main",
-    historyResponses: [PansClawChatHistoryPayload],
-    sessionsResponses: [PansClawChatSessionsListResponse] = [],
-    modelResponses: [[PansClawChatModelChoice]] = [],
+    historyResponses: [OpenClawChatHistoryPayload],
+    sessionsResponses: [OpenClawChatSessionsListResponse] = [],
+    modelResponses: [[OpenClawChatModelChoice]] = [],
     resetSessionHook: (@Sendable (String) async throws -> Void)? = nil,
+    compactSessionHook: (@Sendable (String) async throws -> Void)? = nil,
     setSessionModelHook: (@Sendable (String?) async throws -> Void)? = nil,
     setSessionThinkingHook: (@Sendable (String) async throws -> Void)? = nil,
     initialThinkingLevel: String? = nil,
     onThinkingLevelChanged: (@MainActor @Sendable (String) -> Void)? = nil) async
-    -> (TestChatTransport, PansClawChatViewModel)
+    -> (TestChatTransport, OpenClawChatViewModel)
 {
     let transport = TestChatTransport(
         historyResponses: historyResponses,
         sessionsResponses: sessionsResponses,
         modelResponses: modelResponses,
         resetSessionHook: resetSessionHook,
+        compactSessionHook: compactSessionHook,
         setSessionModelHook: setSessionModelHook,
         setSessionThinkingHook: setSessionThinkingHook)
     let vm = await MainActor.run {
-        PansClawChatViewModel(
+        OpenClawChatViewModel(
             sessionKey: sessionKey,
             transport: transport,
             initialThinkingLevel: initialThinkingLevel,
@@ -108,7 +110,7 @@ private func makeViewModel(
 }
 
 private func loadAndWaitBootstrap(
-    vm: PansClawChatViewModel,
+    vm: OpenClawChatViewModel,
     sessionId: String? = nil) async throws
 {
     await MainActor.run { vm.load() }
@@ -119,11 +121,33 @@ private func loadAndWaitBootstrap(
     }
 }
 
-private func sendUserMessage(_ vm: PansClawChatViewModel, text: String = "hi") async {
+private func sendUserMessage(_ vm: OpenClawChatViewModel, text: String = "hi") async {
     await MainActor.run {
         vm.input = text
         vm.send()
     }
+}
+
+@discardableResult
+private func sendMessageAndEmitFinal(
+    transport: TestChatTransport,
+    vm: OpenClawChatViewModel,
+    text: String,
+    sessionKey: String = "main") async throws -> String
+{
+    await sendUserMessage(vm, text: text)
+    try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
+
+    let runId = try #require(await transport.lastSentRunId())
+    transport.emit(
+        .chat(
+            OpenClawChatEventPayload(
+                runId: runId,
+                sessionKey: sessionKey,
+                state: "final",
+                message: nil,
+                errorMessage: nil)))
+    return runId
 }
 
 private func emitAssistantText(
@@ -134,7 +158,7 @@ private func emitAssistantText(
 {
     transport.emit(
         .agent(
-            PansClawAgentEventPayload(
+            OpenClawAgentEventPayload(
                 runId: runId,
                 seq: seq,
                 stream: "assistant",
@@ -149,7 +173,7 @@ private func emitToolStart(
 {
     transport.emit(
         .agent(
-            PansClawAgentEventPayload(
+            OpenClawAgentEventPayload(
                 runId: runId,
                 seq: seq,
                 stream: "tool",
@@ -169,7 +193,7 @@ private func emitExternalFinal(
 {
     transport.emit(
         .chat(
-            PansClawChatEventPayload(
+            OpenClawChatEventPayload(
                 runId: runId,
                 sessionKey: sessionKey,
                 state: "final",
@@ -197,11 +221,25 @@ private actor AsyncGate {
     }
 }
 
+private actor AsyncCounter {
+    private var value: Int
+
+    init(_ initialValue: Int = 0) {
+        self.value = initialValue
+    }
+
+    func increment() -> Int {
+        self.value += 1
+        return self.value
+    }
+}
+
 private actor TestChatTransportState {
     var historyCallCount: Int = 0
     var sessionsCallCount: Int = 0
     var modelsCallCount: Int = 0
     var resetSessionKeys: [String] = []
+    var compactSessionKeys: [String] = []
     var sentRunIds: [String] = []
     var sentThinkingLevels: [String] = []
     var abortedRunIds: [String] = []
@@ -209,23 +247,25 @@ private actor TestChatTransportState {
     var patchedThinkingLevels: [String] = []
 }
 
-private final class TestChatTransport: @unchecked Sendable, PansClawChatTransport {
+private final class TestChatTransport: @unchecked Sendable, OpenClawChatTransport {
     private let state = TestChatTransportState()
-    private let historyResponses: [PansClawChatHistoryPayload]
-    private let sessionsResponses: [PansClawChatSessionsListResponse]
-    private let modelResponses: [[PansClawChatModelChoice]]
+    private let historyResponses: [OpenClawChatHistoryPayload]
+    private let sessionsResponses: [OpenClawChatSessionsListResponse]
+    private let modelResponses: [[OpenClawChatModelChoice]]
     private let resetSessionHook: (@Sendable (String) async throws -> Void)?
+    private let compactSessionHook: (@Sendable (String) async throws -> Void)?
     private let setSessionModelHook: (@Sendable (String?) async throws -> Void)?
     private let setSessionThinkingHook: (@Sendable (String) async throws -> Void)?
 
-    private let stream: AsyncStream<PansClawChatTransportEvent>
-    private let continuation: AsyncStream<PansClawChatTransportEvent>.Continuation
+    private let stream: AsyncStream<OpenClawChatTransportEvent>
+    private let continuation: AsyncStream<OpenClawChatTransportEvent>.Continuation
 
     init(
-        historyResponses: [PansClawChatHistoryPayload],
-        sessionsResponses: [PansClawChatSessionsListResponse] = [],
-        modelResponses: [[PansClawChatModelChoice]] = [],
+        historyResponses: [OpenClawChatHistoryPayload],
+        sessionsResponses: [OpenClawChatSessionsListResponse] = [],
+        modelResponses: [[OpenClawChatModelChoice]] = [],
         resetSessionHook: (@Sendable (String) async throws -> Void)? = nil,
+        compactSessionHook: (@Sendable (String) async throws -> Void)? = nil,
         setSessionModelHook: (@Sendable (String?) async throws -> Void)? = nil,
         setSessionThinkingHook: (@Sendable (String) async throws -> Void)? = nil)
     {
@@ -233,28 +273,29 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
         self.sessionsResponses = sessionsResponses
         self.modelResponses = modelResponses
         self.resetSessionHook = resetSessionHook
+        self.compactSessionHook = compactSessionHook
         self.setSessionModelHook = setSessionModelHook
         self.setSessionThinkingHook = setSessionThinkingHook
-        var cont: AsyncStream<PansClawChatTransportEvent>.Continuation!
+        var cont: AsyncStream<OpenClawChatTransportEvent>.Continuation!
         self.stream = AsyncStream { c in
             cont = c
         }
         self.continuation = cont
     }
 
-    func events() -> AsyncStream<PansClawChatTransportEvent> {
+    func events() -> AsyncStream<OpenClawChatTransportEvent> {
         self.stream
     }
 
     func setActiveSessionKey(_: String) async throws {}
 
-    func requestHistory(sessionKey: String) async throws -> PansClawChatHistoryPayload {
+    func requestHistory(sessionKey: String) async throws -> OpenClawChatHistoryPayload {
         let idx = await self.state.historyCallCount
         await self.state.setHistoryCallCount(idx + 1)
         if idx < self.historyResponses.count {
             return self.historyResponses[idx]
         }
-        return self.historyResponses.last ?? PansClawChatHistoryPayload(
+        return self.historyResponses.last ?? OpenClawChatHistoryPayload(
             sessionKey: sessionKey,
             sessionId: nil,
             messages: [],
@@ -266,24 +307,24 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
         message _: String,
         thinking: String,
         idempotencyKey: String,
-        attachments _: [PansClawChatAttachmentPayload]) async throws -> PansClawChatSendResponse
+        attachments _: [OpenClawChatAttachmentPayload]) async throws -> OpenClawChatSendResponse
     {
         await self.state.sentRunIdsAppend(idempotencyKey)
         await self.state.sentThinkingLevelsAppend(thinking)
-        return PansClawChatSendResponse(runId: idempotencyKey, status: "ok")
+        return OpenClawChatSendResponse(runId: idempotencyKey, status: "ok")
     }
 
     func abortRun(sessionKey _: String, runId: String) async throws {
         await self.state.abortedRunIdsAppend(runId)
     }
 
-    func listSessions(limit _: Int?) async throws -> PansClawChatSessionsListResponse {
+    func listSessions(limit _: Int?) async throws -> OpenClawChatSessionsListResponse {
         let idx = await self.state.sessionsCallCount
         await self.state.setSessionsCallCount(idx + 1)
         if idx < self.sessionsResponses.count {
             return self.sessionsResponses[idx]
         }
-        return self.sessionsResponses.last ?? PansClawChatSessionsListResponse(
+        return self.sessionsResponses.last ?? OpenClawChatSessionsListResponse(
             ts: nil,
             path: nil,
             count: 0,
@@ -291,7 +332,7 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
             sessions: [])
     }
 
-    func listModels() async throws -> [PansClawChatModelChoice] {
+    func listModels() async throws -> [OpenClawChatModelChoice] {
         let idx = await self.state.modelsCallCount
         await self.state.setModelsCallCount(idx + 1)
         if idx < self.modelResponses.count {
@@ -314,6 +355,13 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
         }
     }
 
+    func compactSession(sessionKey: String) async throws {
+        await self.state.compactSessionKeysAppend(sessionKey)
+        if let compactSessionHook = self.compactSessionHook {
+            try await compactSessionHook(sessionKey)
+        }
+    }
+
     func setSessionThinking(sessionKey _: String, thinkingLevel: String) async throws {
         await self.state.patchedThinkingLevelsAppend(thinkingLevel)
         if let setSessionThinkingHook = self.setSessionThinkingHook {
@@ -325,7 +373,7 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
         true
     }
 
-    func emit(_ evt: PansClawChatTransportEvent) {
+    func emit(_ evt: OpenClawChatTransportEvent) {
         self.continuation.yield(evt)
     }
 
@@ -352,6 +400,10 @@ private final class TestChatTransport: @unchecked Sendable, PansClawChatTranspor
 
     func resetSessionKeys() async -> [String] {
         await self.state.resetSessionKeys
+    }
+
+    func compactSessionKeys() async -> [String] {
+        await self.state.compactSessionKeys
     }
 }
 
@@ -391,6 +443,10 @@ extension TestChatTransportState {
     fileprivate func resetSessionKeysAppend(_ v: String) {
         self.resetSessionKeys.append(v)
     }
+
+    fileprivate func compactSessionKeysAppend(_ v: String) {
+        self.compactSessionKeys.append(v)
+    }
 }
 
 @Suite struct ChatViewModelTests {
@@ -424,7 +480,7 @@ extension TestChatTransportState {
         let runId = try #require(await transport.lastSentRunId())
         transport.emit(
             .chat(
-                PansClawChatEventPayload(
+                OpenClawChatEventPayload(
                     runId: runId,
                     sessionKey: "main",
                     state: "final",
@@ -437,6 +493,141 @@ extension TestChatTransportState {
         }
         #expect(await MainActor.run { vm.streamingAssistantText } == nil)
         #expect(await MainActor.run { vm.pendingToolCalls.isEmpty })
+    }
+
+    @Test func keepsOptimisticUserMessageWhenFinalRefreshReturnsOnlyAssistantHistory() async throws {
+        let sessionId = "sess-main"
+        let now = Date().timeIntervalSince1970 * 1000
+        let history1 = historyPayload(sessionId: sessionId)
+        let history2 = historyPayload(
+            sessionId: sessionId,
+            messages: [
+                chatTextMessage(
+                    role: "assistant",
+                    text: "final answer",
+                    timestamp: now + 1),
+            ])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
+        try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
+
+        try await waitUntil("assistant history refreshes without dropping user message") {
+            await MainActor.run {
+                let texts = vm.messages.map { message in
+                    (message.role, message.content.compactMap(\.text).joined(separator: "\n"))
+                }
+                return texts.contains(where: { $0.0 == "assistant" && $0.1 == "final answer" }) &&
+                    texts.contains(where: { $0.0 == "user" && $0.1 == "hello from mac webchat" })
+            }
+        }
+    }
+
+    @Test func keepsOptimisticUserMessageWhenFinalRefreshHistoryIsTemporarilyEmpty() async throws {
+        let sessionId = "sess-main"
+        let history1 = historyPayload(sessionId: sessionId)
+        let history2 = historyPayload(sessionId: sessionId, messages: [])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
+        try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
+
+        try await waitUntil("empty refresh does not clear optimistic user message") {
+            await MainActor.run {
+                vm.messages.contains { message in
+                    message.role == "user" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "hello from mac webchat"
+                }
+            }
+        }
+    }
+
+    @Test func doesNotDuplicateUserMessageWhenRefreshReturnsCanonicalTimestamp() async throws {
+        let sessionId = "sess-main"
+        let now = Date().timeIntervalSince1970 * 1000
+        let history1 = historyPayload(sessionId: sessionId)
+        let history2 = historyPayload(
+            sessionId: sessionId,
+            messages: [
+                chatTextMessage(
+                    role: "user",
+                    text: "hello from mac webchat",
+                    timestamp: now + 5_000),
+                chatTextMessage(
+                    role: "assistant",
+                    text: "final answer",
+                    timestamp: now + 6_000),
+            ])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
+        try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
+
+        try await waitUntil("canonical refresh keeps one user message") {
+            await MainActor.run {
+                let userMessages = vm.messages.filter { message in
+                    message.role == "user" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "hello from mac webchat"
+                }
+                let hasAssistant = vm.messages.contains { message in
+                    message.role == "assistant" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "final answer"
+                }
+                return hasAssistant && userMessages.count == 1
+            }
+        }
+    }
+
+    @Test func preservesRepeatedOptimisticUserMessagesWithIdenticalContentDuringRefresh() async throws {
+        let sessionId = "sess-main"
+        let now = Date().timeIntervalSince1970 * 1000
+        let history1 = historyPayload(sessionId: sessionId)
+        let history2 = historyPayload(
+            sessionId: sessionId,
+            messages: [
+                chatTextMessage(
+                    role: "user",
+                    text: "retry",
+                    timestamp: now + 5_000),
+                chatTextMessage(
+                    role: "assistant",
+                    text: "first answer",
+                    timestamp: now + 6_000),
+            ])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [history1, history2, history2])
+        try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "retry")
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "retry")
+
+        try await waitUntil("repeated optimistic user message is preserved") {
+            await MainActor.run {
+                let retryMessages = vm.messages.filter { message in
+                    message.role == "user" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "retry"
+                }
+                let hasAssistant = vm.messages.contains { message in
+                    message.role == "assistant" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "first answer"
+                }
+                return hasAssistant && retryMessages.count == 2
+            }
+        }
     }
 
     @Test func acceptsCanonicalSessionKeyEventsForOwnPendingRun() async throws {
@@ -457,7 +648,7 @@ extension TestChatTransportState {
         let runId = try #require(await transport.lastSentRunId())
         transport.emit(
             .chat(
-                PansClawChatEventPayload(
+                OpenClawChatEventPayload(
                     runId: runId,
                     sessionKey: "agent:main:main",
                     state: "final",
@@ -486,7 +677,7 @@ extension TestChatTransportState {
 
         transport.emit(
             .chat(
-                PansClawChatEventPayload(
+                OpenClawChatEventPayload(
                     runId: "external-run",
                     sessionKey: "agent:main:main",
                     state: "final",
@@ -569,7 +760,7 @@ extension TestChatTransportState {
         let recentOlder = now - (5 * 60 * 60 * 1000)
         let stale = now - (26 * 60 * 60 * 1000)
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 4,
@@ -593,7 +784,7 @@ extension TestChatTransportState {
         let now = Date().timeIntervalSince1970 * 1000
         let recent = now - (30 * 60 * 1000)
         let history = historyPayload(sessionKey: "custom", sessionId: "sess-custom")
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -618,16 +809,16 @@ extension TestChatTransportState {
         let recent = now - (30 * 60 * 1000)
         let recentOlder = now - (90 * 60 * 1000)
         let history = historyPayload(sessionKey: "Luke’s MacBook Pro", sessionId: "sess-main")
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 2,
-            defaults: PansClawChatSessionsDefaults(
+            defaults: OpenClawChatSessionsDefaults(
                 model: nil,
                 contextTokens: nil,
                 mainSessionKey: "Luke’s MacBook Pro"),
             sessions: [
-                PansClawChatSessionEntry(
+                OpenClawChatSessionEntry(
                     key: "Luke’s MacBook Pro",
                     kind: nil,
                     displayName: "Luke’s MacBook Pro",
@@ -666,16 +857,16 @@ extension TestChatTransportState {
         let recent = now - (2 * 60 * 1000)
         let recentOlder = now - (5 * 60 * 1000)
         let history = historyPayload(sessionKey: "agent:main:main", sessionId: "sess-main")
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 2,
-            defaults: PansClawChatSessionsDefaults(
+            defaults: OpenClawChatSessionsDefaults(
                 model: nil,
                 contextTokens: nil,
                 mainSessionKey: "agent:main:main"),
             sessions: [
-                PansClawChatSessionEntry(
+                OpenClawChatSessionEntry(
                     key: "agent:main:onboarding",
                     kind: nil,
                     displayName: "Luke’s MacBook Pro",
@@ -695,7 +886,7 @@ extension TestChatTransportState {
                     modelProvider: nil,
                     model: nil,
                     contextTokens: nil),
-                PansClawChatSessionEntry(
+                OpenClawChatSessionEntry(
                     key: "agent:main:main",
                     kind: nil,
                     displayName: "Luke’s MacBook Pro",
@@ -758,14 +949,148 @@ extension TestChatTransportState {
         #expect(await transport.lastSentRunId() == nil)
     }
 
+    @Test func compactTriggerCompactsSessionAndReloadsHistory() async throws {
+        let before = historyPayload(
+            messages: [
+                chatTextMessage(role: "assistant", text: "before compact", timestamp: 1),
+            ])
+        let after = historyPayload(
+            messages: [
+                chatTextMessage(role: "assistant", text: "after compact", timestamp: 2),
+            ])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [before, after])
+        try await loadAndWaitBootstrap(vm: vm)
+        try await waitUntil("initial history loaded") {
+            await MainActor.run { vm.messages.first?.content.first?.text == "before compact" }
+        }
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await waitUntil("compact called") {
+            await transport.compactSessionKeys() == ["main"]
+        }
+        try await waitUntil("history reloaded") {
+            await MainActor.run { vm.messages.first?.content.first?.text == "after compact" }
+        }
+        #expect(await transport.lastSentRunId() == nil)
+    }
+
+    @Test func compactTriggerShowsGenericErrorMessageOnFailure() async throws {
+        let history = historyPayload()
+        let (transport, vm) = await makeViewModel(
+            historyResponses: [history],
+            compactSessionHook: { _ in
+                throw NSError(
+                    domain: "TestCompact",
+                    code: 42,
+                    userInfo: [NSLocalizedDescriptionKey: "backend details should not leak"])
+            })
+        try await loadAndWaitBootstrap(vm: vm)
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await waitUntil("compact attempted") {
+            await transport.compactSessionKeys() == ["main"]
+        }
+        #expect(await MainActor.run { vm.errorText } == "Unable to compact the session. Please try again.")
+    }
+
+    @Test func compactTriggerIgnoresConcurrentAndImmediateRepeatRequests() async throws {
+        let before = historyPayload(
+            messages: [
+                chatTextMessage(role: "assistant", text: "before compact", timestamp: 1),
+            ])
+        let after = historyPayload(
+            messages: [
+                chatTextMessage(role: "assistant", text: "after compact", timestamp: 2),
+            ])
+        let gate = AsyncGate()
+        let (transport, vm) = await makeViewModel(
+            historyResponses: [before, after],
+            compactSessionHook: { _ in
+                await gate.wait()
+            })
+        try await loadAndWaitBootstrap(vm: vm)
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await waitUntil("single compact request issued") {
+            await transport.compactSessionKeys() == ["main"]
+        }
+        #expect(await MainActor.run { vm.errorText } == nil)
+
+        await gate.open()
+        try await waitUntil("history reloaded after compact") {
+            await MainActor.run { vm.messages.first?.content.first?.text == "after compact" }
+        }
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await transport.compactSessionKeys() == ["main"])
+        #expect(await MainActor.run { vm.errorText } == "Please wait before compacting this session again.")
+    }
+
+    @Test func compactTriggerAllowsImmediateRetryAfterFailure() async throws {
+        let history = historyPayload()
+        let attemptCount = AsyncCounter()
+        let (transport, vm) = await makeViewModel(
+            historyResponses: [history],
+            compactSessionHook: { _ in
+                let next = await attemptCount.increment()
+                if next == 1 {
+                    throw NSError(
+                        domain: "TestCompact",
+                        code: 42,
+                        userInfo: [NSLocalizedDescriptionKey: "temporary failure"])
+                }
+            })
+        try await loadAndWaitBootstrap(vm: vm)
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await waitUntil("first compact attempted") {
+            await transport.compactSessionKeys() == ["main"]
+        }
+        #expect(await MainActor.run { vm.errorText } == "Unable to compact the session. Please try again.")
+
+        await MainActor.run {
+            vm.input = "/compact"
+            vm.send()
+        }
+
+        try await waitUntil("second compact attempted") {
+            await transport.compactSessionKeys() == ["main", "main"]
+        }
+        #expect(await MainActor.run { vm.errorText } == nil)
+    }
+
     @Test func bootstrapsModelSelectionFromSessionAndDefaults() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
-            defaults: PansClawChatSessionsDefaults(model: "openai/gpt-4.1-mini", contextTokens: nil),
+            defaults: OpenClawChatSessionsDefaults(model: "openai/gpt-4.1-mini", contextTokens: nil),
             sessions: [
                 sessionEntry(key: "main", updatedAt: now, model: "anthropic/claude-opus-4-6"),
             ])
@@ -789,11 +1114,11 @@ extension TestChatTransportState {
     @Test func selectingDefaultModelPatchesNilAndUpdatesSelection() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
-            defaults: PansClawChatSessionsDefaults(model: "openai/gpt-4.1-mini", contextTokens: nil),
+            defaults: OpenClawChatSessionsDefaults(model: "openai/gpt-4.1-mini", contextTokens: nil),
             sessions: [
                 sessionEntry(key: "main", updatedAt: now, model: "anthropic/claude-opus-4-6"),
             ])
@@ -809,24 +1134,24 @@ extension TestChatTransportState {
 
         try await loadAndWaitBootstrap(vm: vm)
 
-        await MainActor.run { vm.selectModel(PansClawChatViewModel.defaultModelSelectionID) }
+        await MainActor.run { vm.selectModel(OpenClawChatViewModel.defaultModelSelectionID) }
 
         try await waitUntil("session model patched") {
             let patched = await transport.patchedModels()
             return patched == [nil]
         }
 
-        #expect(await MainActor.run { vm.modelSelectionID } == PansClawChatViewModel.defaultModelSelectionID)
+        #expect(await MainActor.run { vm.modelSelectionID } == OpenClawChatViewModel.defaultModelSelectionID)
     }
 
     @Test func selectingProviderQualifiedModelDisambiguatesDuplicateModelIDs() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
-            defaults: PansClawChatSessionsDefaults(model: "openrouter/gpt-4.1-mini", contextTokens: nil),
+            defaults: OpenClawChatSessionsDefaults(model: "openrouter/gpt-4.1-mini", contextTokens: nil),
             sessions: [
                 sessionEntry(key: "main", updatedAt: now, model: "gpt-4.1-mini", modelProvider: "openrouter"),
             ])
@@ -855,7 +1180,7 @@ extension TestChatTransportState {
     @Test func slashModelIDsStayProviderQualifiedInSelectionAndPatch() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -888,7 +1213,7 @@ extension TestChatTransportState {
     @Test func staleModelPatchCompletionsDoNotOverwriteNewerSelection() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -931,7 +1256,7 @@ extension TestChatTransportState {
     @Test func sendWaitsForInFlightModelPatchToFinish() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -984,7 +1309,7 @@ extension TestChatTransportState {
     @Test func failedLatestModelSelectionDoesNotReplayAfterOlderCompletionFinishes() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -1034,7 +1359,7 @@ extension TestChatTransportState {
     @Test func failedLatestModelSelectionRestoresEarlierSuccessWithoutReplay() async throws {
         let now = Date().timeIntervalSince1970 * 1000
         let history = historyPayload()
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 1,
@@ -1082,7 +1407,7 @@ extension TestChatTransportState {
 
     @Test func switchingSessionsIgnoresLateModelPatchCompletionFromPreviousSession() async throws {
         let now = Date().timeIntervalSince1970 * 1000
-        let sessions = PansClawChatSessionsListResponse(
+        let sessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 2,
@@ -1121,13 +1446,13 @@ extension TestChatTransportState {
             return patched == ["openai/gpt-5.4"]
         }
 
-        #expect(await MainActor.run { vm.modelSelectionID } == PansClawChatViewModel.defaultModelSelectionID)
+        #expect(await MainActor.run { vm.modelSelectionID } == OpenClawChatViewModel.defaultModelSelectionID)
         #expect(await MainActor.run { vm.sessions.first(where: { $0.key == "other" })?.model } == nil)
     }
 
     @Test func lateModelCompletionDoesNotReplayCurrentSessionSelectionIntoPreviousSession() async throws {
         let now = Date().timeIntervalSince1970 * 1000
-        let initialSessions = PansClawChatSessionsListResponse(
+        let initialSessions = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 2,
@@ -1136,7 +1461,7 @@ extension TestChatTransportState {
                 sessionEntry(key: "main", updatedAt: now, model: nil),
                 sessionEntry(key: "other", updatedAt: now - 1000, model: nil),
             ])
-        let sessionsAfterOtherSelection = PansClawChatSessionsListResponse(
+        let sessionsAfterOtherSelection = OpenClawChatSessionsListResponse(
             ts: now,
             path: nil,
             count: 2,
@@ -1198,7 +1523,7 @@ extension TestChatTransportState {
     }
 
     @Test func explicitThinkingLevelWinsOverHistoryAndPersistsChanges() async throws {
-        let history = PansClawChatHistoryPayload(
+        let history = OpenClawChatHistoryPayload(
             sessionKey: "main",
             sessionId: "sess-main",
             messages: [],
@@ -1227,7 +1552,7 @@ extension TestChatTransportState {
     }
 
     @Test func serverProvidedThinkingLevelsOutsideMenuArePreservedForSend() async throws {
-        let history = PansClawChatHistoryPayload(
+        let history = OpenClawChatHistoryPayload(
             sessionKey: "main",
             sessionId: "sess-main",
             messages: [],
@@ -1245,7 +1570,7 @@ extension TestChatTransportState {
     }
 
     @Test func staleThinkingPatchCompletionReappliesLatestSelection() async throws {
-        let history = PansClawChatHistoryPayload(
+        let history = OpenClawChatHistoryPayload(
             sessionKey: "main",
             sessionId: "sess-main",
             messages: [],
@@ -1288,7 +1613,7 @@ extension TestChatTransportState {
 
         transport.emit(
             .chat(
-                PansClawChatEventPayload(
+                OpenClawChatEventPayload(
                     runId: "other-run",
                     sessionKey: "main",
                     state: "error",
@@ -1299,7 +1624,7 @@ extension TestChatTransportState {
     }
 
     @Test func stripsInboundMetadataFromHistoryMessages() async throws {
-        let history = PansClawChatHistoryPayload(
+        let history = OpenClawChatHistoryPayload(
             sessionKey: "main",
             sessionId: "sess-main",
             messages: [
@@ -1318,7 +1643,7 @@ Hello?
             ],
             thinkingLevel: "off")
         let transport = TestChatTransport(historyResponses: [history])
-        let vm = await MainActor.run { PansClawChatViewModel(sessionKey: "main", transport: transport) }
+        let vm = await MainActor.run { OpenClawChatViewModel(sessionKey: "main", transport: transport) }
 
         await MainActor.run { vm.load() }
         try await waitUntil("history loaded") { await MainActor.run { !vm.messages.isEmpty } }
@@ -1349,7 +1674,7 @@ Hello?
 
         transport.emit(
             .chat(
-                PansClawChatEventPayload(
+                OpenClawChatEventPayload(
                     runId: runId,
                     sessionKey: "main",
                     state: "aborted",

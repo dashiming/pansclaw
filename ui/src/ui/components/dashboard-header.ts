@@ -18,9 +18,12 @@ export class DashboardHeader extends LitElement {
         <div class="dashboard-header__breadcrumb">
           <span
             class="dashboard-header__breadcrumb-link"
-            @click=${() => this.dispatchEvent(new CustomEvent("navigate", { detail: "overview", bubbles: true, composed: true }))}
+            @click=${() =>
+              this.dispatchEvent(
+                new CustomEvent("navigate", { detail: "overview", bubbles: true, composed: true }),
+              )}
           >
-            PansClaw
+            OpenClaw
           </span>
           <span class="dashboard-header__breadcrumb-sep">›</span>
           <span class="dashboard-header__breadcrumb-current">${label}</span>

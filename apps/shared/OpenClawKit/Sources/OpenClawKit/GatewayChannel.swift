@@ -1,4 +1,4 @@
-import PansClawProtocol
+import OpenClawProtocol
 import Foundation
 import OSLog
 
@@ -118,7 +118,7 @@ public enum GatewayAuthSource: String, Sendable {
 }
 
 // Avoid ambiguity with the app's own AnyCodable type.
-private typealias ProtoAnyCodable = PansClawProtocol.AnyCodable
+private typealias ProtoAnyCodable = OpenClawProtocol.AnyCodable
 
 private enum ConnectChallengeError: Error {
     case timeout
@@ -513,8 +513,11 @@ public actor GatewayChannelActor {
             storedToken != nil && explicitToken != nil && self.isTrustedDeviceRetryEndpoint()
         let authToken =
             explicitToken ??
-                (includeDeviceIdentity && explicitPassword == nil &&
-                    (explicitBootstrapToken == nil || storedToken != nil) ? storedToken : nil)
+                // A freshly scanned setup code should force the bootstrap pairing path instead of
+                // silently reusing an older stored device token.
+                (includeDeviceIdentity && explicitPassword == nil && explicitBootstrapToken == nil
+                    ? storedToken
+                    : nil)
         let authBootstrapToken = authToken == nil ? explicitBootstrapToken : nil
         let authDeviceToken = shouldUseDeviceRetryToken ? storedToken : nil
         let authSource: GatewayAuthSource
