@@ -1247,6 +1247,7 @@
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260326.1",
     "@vitest/coverage-v8": "^4.1.2",
+    "agent-browser": "^0.23.4",
     "jscpd": "4.0.8",
     "jsdom": "^29.0.1",
     "lit": "^3.3.2",
