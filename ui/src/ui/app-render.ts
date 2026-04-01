@@ -29,6 +29,7 @@ import {
   refreshVisibleToolsEffectiveForCurrentSession,
   saveAgentsConfig,
 } from "./controllers/agents.ts";
+import { saveAuthProfile, updateAuthProfileDraft } from "./controllers/auth-profiles.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import {
@@ -78,6 +79,15 @@ import {
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
+import {
+  loadEnvFile,
+  refreshProviderSetupModels,
+  saveEnvFile,
+  saveProviderSetupDefaultModel,
+  updateEnvFileDraft,
+  updateProviderSetupBaseUrlDraft,
+  updateProviderSetupModelSelection,
+} from "./controllers/provider-setup.ts";
 import { deleteSessionsAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
 import {
   installSkill,
@@ -98,7 +108,6 @@ import {
   resolveModelPrimary,
   sortLocaleStrings,
 } from "./views/agents-utils.ts";
-import { renderApiKeys } from "./views/api-keys.ts";
 import { renderChat } from "./views/chat.ts";
 import { renderCommandPalette } from "./views/command-palette.ts";
 import { renderConfig } from "./views/config.ts";
@@ -1614,6 +1623,61 @@ export function renderApp(state: AppViewState) {
                 "wizard",
               ],
               includeVirtualSections: false,
+            })
+          : nothing}
+        ${state.tab === "modelSetup"
+          ? renderProviderSetup({
+              client: state.client,
+              connected: state.connected,
+              updateRunning: state.updateRunning,
+              lastError: state.lastError,
+              configSnapshot: state.configSnapshot,
+              chatModelCatalog: state.chatModelCatalog,
+              chatModelsLoading: state.chatModelsLoading,
+              modelSetupSelectedModel: state.modelSetupSelectedModel,
+              modelSetupBaseUrlDrafts: state.modelSetupBaseUrlDrafts,
+              modelSetupModelSaving: state.modelSetupModelSaving,
+              modelSetupModelMessage: state.modelSetupModelMessage,
+              envFileAvailable: state.envFileAvailable,
+              envFileEntries: state.envFileEntries,
+              envFileLoading: state.envFileLoading,
+              envFileWriting: state.envFileWriting,
+              envFileMessage: state.envFileMessage,
+              authProfilesLoading: state.authProfilesLoading,
+              authProfilesResult: state.authProfilesResult,
+              authProfilesDrafts: state.authProfilesDrafts,
+              authProfilesSavingProvider: state.authProfilesSavingProvider,
+              authProfilesMessages: state.authProfilesMessages,
+              onRefreshModels: () => {
+                void refreshProviderSetupModels(state);
+              },
+              onModelSelect: (model) => {
+                updateProviderSetupModelSelection(state, model);
+              },
+              onBaseUrlDraftChange: (provider, value) => {
+                updateProviderSetupBaseUrlDraft(state, provider, value);
+              },
+              onSaveModel: () => {
+                void saveProviderSetupDefaultModel(state);
+              },
+              onDraftChange: (provider, value) => {
+                updateAuthProfileDraft(state, provider, value);
+              },
+              onSaveProviderKey: (provider) => {
+                void saveAuthProfile(state, provider);
+              },
+              onRunCoreUpdate: () => {
+                void runUpdate(state, "core");
+              },
+              onLoadEnvFile: () => {
+                void loadEnvFile(state);
+              },
+              onEnvDraftChange: (key, value) => {
+                updateEnvFileDraft(state, key, value);
+              },
+              onSaveEnvFile: (updates) => {
+                void saveEnvFile(state, updates);
+              },
             })
           : nothing}
         ${state.tab === "communications"

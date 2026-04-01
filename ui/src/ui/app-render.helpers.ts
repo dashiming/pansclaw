@@ -5,15 +5,8 @@ import { t } from "../i18n/index.ts";
 import { refreshChat } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import type { AppViewState } from "./app-view-state.ts";
-import { OpenClawApp } from "./app.ts";
-import { createChatModelOverride } from "./chat-model-ref.ts";
-import {
-  resolveChatModelOverrideValue,
-  resolveChatModelSelectState,
-} from "./chat-model-select-state.ts";
-import { refreshVisibleToolsEffectiveForCurrentSession } from "./controllers/agents.ts";
+import { PansClawApp } from "./app.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
-import { loadSessions } from "./controllers/sessions.ts";
 import { icons } from "./icons.ts";
 import { iconForTab, pathForTab, titleForTab, type Tab } from "./navigation.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
@@ -542,66 +535,9 @@ async function refreshSessionOptions(state: AppViewState) {
   });
 }
 
-function renderChatModelSelect(state: AppViewState) {
-  const { currentOverride, defaultLabel, options } = resolveChatModelSelectState(state);
-  const busy =
-    state.chatLoading || state.chatSending || Boolean(state.chatRunId) || state.chatStream !== null;
-  const disabled =
-    !state.connected || busy || (state.chatModelsLoading && options.length === 0) || !state.client;
-  return html`
-    <label class="field chat-controls__session chat-controls__model">
-      <select
-        data-chat-model-select="true"
-        aria-label="Chat model"
-        ?disabled=${disabled}
-        @change=${async (e: Event) => {
-          const next = (e.target as HTMLSelectElement).value.trim();
-          await switchChatModel(state, next);
-        }}
-      >
-        <option value="" ?selected=${currentOverride === ""}>${defaultLabel}</option>
-        ${repeat(
-          options,
-          (entry) => entry.value,
-          (entry) =>
-            html`<option value=${entry.value} ?selected=${entry.value === currentOverride}>
-              ${entry.label}
-            </option>`,
-        )}
-      </select>
-    </label>
-  `;
-}
-
-async function switchChatModel(state: AppViewState, nextModel: string) {
-  if (!state.client || !state.connected) {
-    return;
-  }
-  const currentOverride = resolveChatModelOverrideValue(state);
-  if (currentOverride === nextModel) {
-    return;
-  }
-  const targetSessionKey = state.sessionKey;
-  const prevOverride = state.chatModelOverrides[targetSessionKey];
-  state.lastError = null;
-  // Write the override cache immediately so the picker stays in sync during the RPC round-trip.
-  state.chatModelOverrides = {
-    ...state.chatModelOverrides,
-    [targetSessionKey]: createChatModelOverride(nextModel),
-  };
-  try {
-    await state.client.request("sessions.patch", {
-      key: targetSessionKey,
-      model: nextModel || null,
-    });
-    void refreshVisibleToolsEffectiveForCurrentSession(state);
-    await refreshSessionOptions(state);
-  } catch (err) {
-    // Roll back so the picker reflects the actual server model.
-    state.chatModelOverrides = { ...state.chatModelOverrides, [targetSessionKey]: prevOverride };
-    state.lastError = `Failed to set model: ${String(err)}`;
-  }
-}
+// Unused - kept for reference during refactor
+// Unused functions removed - kept for reference
+// async function switchChatModel(state: AppViewState, nextModel: string) {
 
 /* ── Channel display labels ────────────────────────────── */
 const CHANNEL_LABELS: Record<string, string> = {

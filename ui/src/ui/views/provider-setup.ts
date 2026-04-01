@@ -22,6 +22,8 @@ export type EnvFileState = {
 export type ProviderSetupState = EnvFileState & {
   client: GatewayBrowserClient | null;
   connected: boolean;
+  updateRunning: boolean;
+  lastError: string | null;
   // model picker
   modelSetupSelectedModel: string;
   modelSetupBaseUrlDrafts: Record<string, string>;
@@ -48,6 +50,7 @@ export type ProviderSetupProps = ProviderSetupState &
     onSaveModel: () => void | Promise<void>;
     onDraftChange: (provider: string, value: string) => void;
     onSaveProviderKey: (provider: string) => void | Promise<void>;
+    onRunCoreUpdate: () => void;
     onLoadEnvFile: () => void;
     onEnvDraftChange: (key: string, value: string) => void;
     onSaveEnvFile: (updates: Record<string, string>) => void;
@@ -199,10 +202,38 @@ function normalizeBaseUrl(value: string): string {
 export function renderProviderSetup(props: ProviderSetupProps) {
   return html`
     <div class="provider-setup">
-      ${renderModelCard(props)}
-      ${renderApiKeysCard(props)}
+      ${renderCoreUpdateCard(props)} ${renderModelCard(props)} ${renderApiKeysCard(props)}
       ${renderEnvFileCard(props)}
     </div>
+  `;
+}
+
+function renderCoreUpdateCard(props: ProviderSetupProps) {
+  return html`
+    <section class="card" style="margin-bottom: 20px;">
+      <div
+        class="row"
+        style="justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;"
+      >
+        <div>
+          <div class="card-title">Core Update</div>
+          <div class="card-sub">
+            One-click core refresh for local pansclaw. This skips UI-specific update steps and keeps
+            custom UI/features unchanged.
+          </div>
+        </div>
+        <button
+          class="btn primary"
+          ?disabled=${props.updateRunning || !props.connected}
+          @click=${props.onRunCoreUpdate}
+        >
+          ${props.updateRunning ? "Updating core..." : "Update Core Only"}
+        </button>
+      </div>
+      ${props.lastError
+        ? html`<div class="callout danger" style="margin-top: 12px;">${props.lastError}</div>`
+        : nothing}
+    </section>
   `;
 }
 
@@ -407,7 +438,10 @@ function renderModelCard(props: ProviderSetupProps) {
           }
         }
       </style>
-      <div class="row" style="justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+      <div
+        class="row"
+        style="justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;"
+      >
         <div>
           <div class="card-title">Default AI Model</div>
           <div class="card-sub">The model used for new conversations.</div>
@@ -435,19 +469,19 @@ function renderModelCard(props: ProviderSetupProps) {
             @blur=${handleBlur}
           />
           <div class="provider-model-search__dd" style="display:none;">
-            ${
-              currentModel
-                ? html`
+            ${currentModel
+              ? html`
                   <div
-                    class="provider-model-search__item ${selected === currentModel ? "provider-model-search__item--selected" : ""}"
+                    class="provider-model-search__item ${selected === currentModel
+                      ? "provider-model-search__item--selected"
+                      : ""}"
                     data-value=${currentModel}
                     @mousedown=${(e: MouseEvent) => pickModel(e, currentModel)}
                   >
                     ${currentModel} (current)
                   </div>
                 `
-                : nothing
-            }
+              : nothing}
             ${[...grouped.entries()].map(
               ([provider, models]) => html`
                 <div class="provider-model-search__group">
@@ -456,7 +490,9 @@ function renderModelCard(props: ProviderSetupProps) {
                 ${models.map(
                   (model) => html`
                     <div
-                      class="provider-model-search__item ${selected === model.value ? "provider-model-search__item--selected" : ""}"
+                      class="provider-model-search__item ${selected === model.value
+                        ? "provider-model-search__item--selected"
+                        : ""}"
                       data-value=${model.value}
                       @mousedown=${(e: MouseEvent) => pickModel(e, model.value)}
                     >
@@ -471,21 +507,21 @@ function renderModelCard(props: ProviderSetupProps) {
         <div class="provider-model-key-wrap">
           <label class="field" style="gap: 6px;">
             <span>Model name / ID</span>
-          <input
-            class="provider-model-key-input"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            .value=${selected}
-            placeholder="Custom model ID (for example: ollama/qwen2.5:14b)"
-            ?disabled=${busy || !props.connected}
-            @input=${(e: Event) => props.onModelSelect((e.target as HTMLInputElement).value)}
-          />
+            <input
+              class="provider-model-key-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              .value=${selected}
+              placeholder="Custom model ID (for example: ollama/qwen2.5:14b)"
+              ?disabled=${busy || !props.connected}
+              @input=${(e: Event) => props.onModelSelect((e.target as HTMLInputElement).value)}
+            />
           </label>
         </div>
-          <div class="provider-model-key-wrap">
-            <label class="field" style="gap: 6px;">
-              <span>Endpoint URL</span>
+        <div class="provider-model-key-wrap">
+          <label class="field" style="gap: 6px;">
+            <span>Endpoint URL</span>
             <input
               class="provider-model-key-input"
               type="text"
@@ -497,27 +533,25 @@ function renderModelCard(props: ProviderSetupProps) {
               @input=${(e: Event) =>
                 props.onBaseUrlDraftChange(selectedProvider, (e.target as HTMLInputElement).value)}
             />
-            </label>
-          </div>
+          </label>
+        </div>
         <div class="provider-model-key-wrap">
           <label class="field" style="gap: 6px;">
             <span>API key</span>
-          <input
-            class="provider-model-key-input"
-            type="password"
-            autocomplete="off"
-            .value=${providerDraft}
-            placeholder=${
-              selectedProviderInfo
+            <input
+              class="provider-model-key-input"
+              type="password"
+              autocomplete="off"
+              .value=${providerDraft}
+              placeholder=${selectedProviderInfo
                 ? `Enter ${selectedProviderInfo.label} API key`
                 : selectedProvider
                   ? `Enter ${selectedProvider} API key`
-                  : "API key (if needed)"
-            }
-            ?disabled=${busy || !props.connected}
-            @input=${(e: Event) =>
-              props.onDraftChange(selectedProvider, (e.target as HTMLInputElement).value)}
-          />
+                  : "API key (if needed)"}
+              ?disabled=${busy || !props.connected}
+              @input=${(e: Event) =>
+                props.onDraftChange(selectedProvider, (e.target as HTMLInputElement).value)}
+            />
           </label>
         </div>
         <button
@@ -531,64 +565,48 @@ function renderModelCard(props: ProviderSetupProps) {
         </button>
       </div>
 
-      ${
-        currentModel
-          ? html`<div class="muted" style="margin-top: 8px;">
+      ${currentModel
+        ? html`<div class="muted" style="margin-top: 8px;">
             Current default: <code style="font-family: monospace;">${currentModel}</code>
           </div>`
-          : nothing
-      }
+        : nothing}
 
       <div class="muted" style="margin-top: 8px;">
         Fill in model name/ID, endpoint URL, and API key, then confirm.
       </div>
 
-      ${
-        isCustomModel
-          ? html`
-              <div class="muted" style="margin-top: 8px">
-                Custom model flow: enter model name, endpoint URL, and API key, then confirm.
-              </div>
-            `
-          : nothing
-      }
-
-      ${
-        selectedProviderInfo?.requiresBaseUrl
-          ? html`
-              <div class="muted" style="margin-top: 8px">
-                Enter the remote OpenAI-compatible "/v1" endpoint for your DGX or self-hosted vLLM server.
-              </div>
-            `
-          : nothing
-      }
-
-      ${
-        selectedProviderInfo
-          ? html`<div class="muted" style="margin-top: 8px;">
-              ${
-                providerStatus.configured
-                  ? `${selectedProviderInfo.label} key is already configured.`
-                  : `Add ${selectedProviderInfo.label} API key, then confirm.`
-              }
-            </div>`
-          : nothing
-      }
-
-      ${
-        props.modelSetupModelMessage
-          ? html`<div
+      ${isCustomModel
+        ? html`
+            <div class="muted" style="margin-top: 8px">
+              Custom model flow: enter model name, endpoint URL, and API key, then confirm.
+            </div>
+          `
+        : nothing}
+      ${selectedProviderInfo?.requiresBaseUrl
+        ? html`
+            <div class="muted" style="margin-top: 8px">
+              Enter the remote OpenAI-compatible "/v1" endpoint for your DGX or self-hosted vLLM
+              server.
+            </div>
+          `
+        : nothing}
+      ${selectedProviderInfo
+        ? html`<div class="muted" style="margin-top: 8px;">
+            ${providerStatus.configured
+              ? `${selectedProviderInfo.label} key is already configured.`
+              : `Add ${selectedProviderInfo.label} API key, then confirm.`}
+          </div>`
+        : nothing}
+      ${props.modelSetupModelMessage
+        ? html`<div
             class="muted"
-            style="margin-top: 8px; color: ${
-              props.modelSetupModelMessage.kind === "error"
-                ? "var(--danger-color, #d14343)"
-                : "var(--success-color, #0a7f5a)"
-            };"
+            style="margin-top: 8px; color: ${props.modelSetupModelMessage.kind === "error"
+              ? "var(--danger-color, #d14343)"
+              : "var(--success-color, #0a7f5a)"};"
           >
             ${props.modelSetupModelMessage.text}
           </div>`
-          : nothing
-      }
+        : nothing}
     </section>
   `;
 }
@@ -624,9 +642,9 @@ function renderProviderKeyRow(provider: ProviderInfo, props: ProviderSetupProps)
         <div class="list-sub mono" style="font-size: 11px;">${provider.id}</div>
         <div class="muted" style="margin-top: 6px; display: flex; align-items: center; gap: 6px;">
           <span
-            style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${
-              configured ? "var(--success-color, #0a7f5a)" : "var(--muted-color, #aaa)"
-            };"
+            style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${configured
+              ? "var(--success-color, #0a7f5a)"
+              : "var(--muted-color, #aaa)"};"
           ></span>
           ${configured ? "Configured" : "Not configured"}
         </div>
@@ -645,9 +663,8 @@ function renderProviderKeyRow(provider: ProviderInfo, props: ProviderSetupProps)
           />
         </label>
         <div class="row" style="justify-content: flex-end; gap: 8px; margin-top: 8px;">
-          ${
-            provider.docsUrl
-              ? html`<a
+          ${provider.docsUrl
+            ? html`<a
                 class="btn btn--sm"
                 href=${provider.docsUrl}
                 target="_blank"
@@ -655,8 +672,7 @@ function renderProviderKeyRow(provider: ProviderInfo, props: ProviderSetupProps)
               >
                 Get key
               </a>`
-              : nothing
-          }
+            : nothing}
           <button
             class="btn primary btn--sm"
             ?disabled=${busy || !draft.trim() || !props.connected}
@@ -665,20 +681,16 @@ function renderProviderKeyRow(provider: ProviderInfo, props: ProviderSetupProps)
             ${busy ? "Saving…" : "Save key"}
           </button>
         </div>
-        ${
-          message
-            ? html`<div
+        ${message
+          ? html`<div
               class="muted"
-              style="margin-top: 6px; color: ${
-                message.kind === "error"
-                  ? "var(--danger-color, #d14343)"
-                  : "var(--success-color, #0a7f5a)"
-              };"
+              style="margin-top: 6px; color: ${message.kind === "error"
+                ? "var(--danger-color, #d14343)"
+                : "var(--success-color, #0a7f5a)"};"
             >
               ${message.message}
             </div>`
-            : nothing
-        }
+          : nothing}
       </div>
     </div>
   `;
@@ -693,8 +705,8 @@ function renderEnvFileCard(props: ProviderSetupProps) {
         <div class="card-title">.env File</div>
         <div class="card-sub" style="margin-top: 6px">
           .env file writing is not configured. Set
-          <code style="font-family: monospace">OPENCLAW_ENV_FILE</code> in the container environment to
-          enable this feature.
+          <code style="font-family: monospace">OPENCLAW_ENV_FILE</code> in the container environment
+          to enable this feature.
         </div>
       </section>
     `;
@@ -706,12 +718,15 @@ function renderEnvFileCard(props: ProviderSetupProps) {
 
   return html`
     <section class="card" style="margin-bottom: 20px;">
-      <div class="row" style="justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+      <div
+        class="row"
+        style="justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;"
+      >
         <div>
           <div class="card-title">.env File</div>
           <div class="card-sub">
-            Edit API key environment variables stored in the .env file. Changes require
-            a container restart to take full effect.
+            Edit API key environment variables stored in the .env file. Changes require a container
+            restart to take full effect.
           </div>
         </div>
         <button
@@ -723,17 +738,13 @@ function renderEnvFileCard(props: ProviderSetupProps) {
         </button>
       </div>
 
-      ${
-        available === null
-          ? html`
-              <div class="muted" style="margin-top: 14px">Click Load to read the .env file.</div>
-            `
-          : nothing
-      }
-
-      ${
-        available === true
-          ? html`
+      ${available === null
+        ? html`
+            <div class="muted" style="margin-top: 14px">Click Load to read the .env file.</div>
+          `
+        : nothing}
+      ${available === true
+        ? html`
             <div style="margin-top: 18px;">
               ${relevantKeys.map((envKey) => {
                 const currentVal = entries[envKey] ?? "";
@@ -772,23 +783,17 @@ function renderEnvFileCard(props: ProviderSetupProps) {
               </div>
             </div>
           `
-          : nothing
-      }
-
-      ${
-        props.envFileMessage
-          ? html`<div
+        : nothing}
+      ${props.envFileMessage
+        ? html`<div
             class="muted"
-            style="margin-top: 8px; color: ${
-              props.envFileMessage.kind === "error"
-                ? "var(--danger-color, #d14343)"
-                : "var(--success-color, #0a7f5a)"
-            };"
+            style="margin-top: 8px; color: ${props.envFileMessage.kind === "error"
+              ? "var(--danger-color, #d14343)"
+              : "var(--success-color, #0a7f5a)"};"
           >
             ${props.envFileMessage.text}
           </div>`
-          : nothing
-      }
+        : nothing}
     </section>
   `;
 }

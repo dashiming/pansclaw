@@ -46,6 +46,7 @@ export const UpdateRunParamsSchema = Type.Object(
     note: Type.Optional(Type.String()),
     restartDelayMs: Type.Optional(Type.Integer({ minimum: 0 })),
     timeoutMs: Type.Optional(Type.Integer({ minimum: 1 })),
+    scope: Type.Optional(Type.Union([Type.Literal("full"), Type.Literal("core")])),
   },
   { additionalProperties: false },
 );

@@ -1,6 +1,6 @@
 {
   "name": "pansclaw",
-  "version": "0.3.1",
+  "version": "2026.3.31",
   "description": "Multi-channel AI gateway with extensible messaging integrations",
   "keywords": [],
   "homepage": "https://github.com/dashiming/pansclaw#readme",
@@ -1158,6 +1158,7 @@
     "test:install:e2e:openai": "OPENCLAW_E2E_MODELS=openai bash scripts/test-install-sh-e2e-docker.sh",
     "test:install:smoke": "bash scripts/test-install-sh-docker.sh",
     "test:live": "node scripts/test-live.mjs",
+    "test:macmini": "OPENCLAW_TEST_VM_FORKS=0 OPENCLAW_TEST_PROFILE=serial node scripts/test-parallel.mjs",
     "test:max": "node scripts/test-parallel.mjs --profile max",
     "test:parallels:linux": "bash scripts/e2e/parallels-linux-smoke.sh",
     "test:parallels:macos": "bash scripts/e2e/parallels-macos-smoke.sh",
@@ -1183,8 +1184,7 @@
     "tui:dev": "OPENCLAW_PROFILE=dev node scripts/run-node.mjs --dev tui",
     "ui:build": "node scripts/ui.js build",
     "ui:dev": "node scripts/ui.js dev",
-    "ui:install": "node scripts/ui.js install",
-    "test:macmini": "OPENCLAW_TEST_VM_FORKS=0 OPENCLAW_TEST_PROFILE=serial node scripts/test-parallel.mjs"
+    "ui:install": "node scripts/ui.js install"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.17.0",
@@ -1310,7 +1310,8 @@
     ],
     "ignoredBuiltDependencies": [
       "@discordjs/opus",
-      "koffi"
+      "koffi",
+      "openclaw"
     ],
     "packageExtensions": {
       "@mariozechner/pi-coding-agent": {

@@ -24,10 +24,12 @@ export const updateHandlers: GatewayRequestHandlers = {
     const { sessionKey, note, restartDelayMs } = parseRestartRequestParams(params);
     const { deliveryContext, threadId } = extractDeliveryInfo(sessionKey);
     const timeoutMsRaw = (params as { timeoutMs?: unknown }).timeoutMs;
+    const scopeRaw = (params as { scope?: unknown }).scope;
     const timeoutMs =
       typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
         ? Math.max(1000, Math.floor(timeoutMsRaw))
         : undefined;
+    const scope = scopeRaw === "core" ? "core" : "full";
 
     let result: Awaited<ReturnType<typeof runGatewayUpdate>>;
     try {
@@ -44,6 +46,7 @@ export const updateHandlers: GatewayRequestHandlers = {
         cwd: root,
         argv1: process.argv[1],
         channel: configChannel ?? undefined,
+        scope,
       });
     } catch (err) {
       result = {

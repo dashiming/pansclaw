@@ -177,7 +177,7 @@ export async function applyConfig(state: ConfigState) {
   }
 }
 
-export async function runUpdate(state: ConfigState) {
+export async function runUpdate(state: ConfigState, scope: "full" | "core" = "full") {
   if (!state.client || !state.connected) {
     return;
   }
@@ -189,11 +189,12 @@ export async function runUpdate(state: ConfigState) {
       result?: { status?: string; reason?: string };
     }>("update.run", {
       sessionKey: state.applySessionKey,
+      scope,
     });
     if (res && res.ok === false) {
       const status = res.result?.status ?? "error";
       const reason = res.result?.reason ?? "Update failed.";
-      state.lastError = `Update ${status}: ${reason}`;
+      state.lastError = `Update (${scope}) ${status}: ${reason}`;
     }
   } catch (err) {
     state.lastError = String(err);

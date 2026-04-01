@@ -42,7 +42,7 @@ export function renderLoginGate(state: AppViewState) {
                   const v = (e.target as HTMLInputElement).value;
                   state.applySettings({ ...state.settings, token: v });
                 }}
-                placeholder="OPENCLAW_GATEWAY_TOKEN (${t("login.passwordPlaceholder")})"
+                placeholder="PANSCLAW_GATEWAY_TOKEN (${t("login.passwordPlaceholder")})"
                 @keydown=${(e: KeyboardEvent) => {
                   if (e.key === "Enter") {
                     state.connect();
@@ -109,9 +109,9 @@ export function renderLoginGate(state: AppViewState) {
           <div class="login-gate__help-title">${t("overview.connection.title")}</div>
           <ol class="login-gate__steps">
             <li>
-              ${t("overview.connection.step1")}${renderConnectCommand("openclaw gateway run")}
+              ${t("overview.connection.step1")}${renderConnectCommand("pansclaw gateway run")}
             </li>
-            <li>${t("overview.connection.step2")} ${renderConnectCommand("openclaw dashboard")}</li>
+            <li>${t("overview.connection.step2")} ${renderConnectCommand("pansclaw dashboard")}</li>
             <li>${t("overview.connection.step3")}</li>
           </ol>
           <div class="login-gate__docs">

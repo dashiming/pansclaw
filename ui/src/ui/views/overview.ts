@@ -82,8 +82,8 @@ export function renderOverview(props: OverviewProps) {
       <div class="muted" style="margin-top: 8px">
         ${t("overview.pairing.hint")}
         <div style="margin-top: 6px">
-          <span class="mono">openclaw devices list</span><br />
-          <span class="mono">openclaw devices approve &lt;requestId&gt;</span>
+          <span class="mono">pansclaw devices list</span><br />
+          <span class="mono">pansclaw devices approve &lt;requestId&gt;</span>
         </div>
         <div style="margin-top: 6px; font-size: 12px;">${t("overview.pairing.mobileHint")}</div>
         <div style="margin-top: 6px">
@@ -117,7 +117,7 @@ export function renderOverview(props: OverviewProps) {
           ${t("overview.auth.required")}
           <div style="margin-top: 6px">
             <span class="mono">pansclaw dashboard --no-open</span> → tokenized URL<br />
-            <span class="mono">openclaw doctor --generate-gateway-token</span> → set token
+            <span class="mono">pansclaw doctor --generate-gateway-token</span> → set token
           </div>
           <div style="margin-top: 6px">
             <a
@@ -231,7 +231,7 @@ export function renderOverview(props: OverviewProps) {
                         const v = (e.target as HTMLInputElement).value;
                         props.onSettingsChange({ ...props.settings, token: v });
                       }}
-                      placeholder="OPENCLAW_GATEWAY_TOKEN"
+                      placeholder="PANSCLAW_GATEWAY_TOKEN"
                     />
                     <button
                       type="button"
@@ -319,15 +319,15 @@ export function renderOverview(props: OverviewProps) {
                 <ol class="login-gate__steps">
                   <li>
                     ${t("overview.connection.step1")}
-                    ${renderConnectCommand("openclaw gateway run")}
+                    ${renderConnectCommand("pansclaw gateway run")}
                   </li>
                   <li>
-                    ${t("overview.connection.step2")} ${renderConnectCommand("openclaw dashboard")}
+                    ${t("overview.connection.step2")} ${renderConnectCommand("pansclaw dashboard")}
                   </li>
                   <li>${t("overview.connection.step3")}</li>
                   <li>
                     ${t("overview.connection.step4")}<code
-                      >openclaw doctor --generate-gateway-token</code
+                      >pansclaw doctor --generate-gateway-token</code
                     >
                   </li>
                 </ol>

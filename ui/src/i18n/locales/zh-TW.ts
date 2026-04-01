@@ -58,7 +58,7 @@ export const zh_TW: TranslationMap = {
     skills: "技能和 API 密鑰。",
     nodes: "配對設備和命令。",
     chat: "網關聊天，快速干預。",
-    config: "編輯 openclaw.json。",
+    config: "編輯 pansclaw.json。",
     communications: "頻道、消息和音頻設置。",
     appearance: "主題、界面和設置向導設置。",
     automation: "命令、鉤子、定時任務和插件設置。",

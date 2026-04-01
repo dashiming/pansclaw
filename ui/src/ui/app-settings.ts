@@ -226,7 +226,7 @@ export async function refreshActiveTab(host: SettingsHost) {
     await loadPresence(host as unknown as PansClawApp);
   }
   if (host.tab === "usage") {
-    await loadUsage(host as unknown as OpenClawApp);
+    await loadUsage(host as unknown as PansClawApp);
   }
   if (host.tab === "sessions") {
     await loadSessions(host as unknown as PansClawApp);

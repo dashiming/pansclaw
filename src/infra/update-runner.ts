@@ -81,6 +81,7 @@ type UpdateRunnerOptions = {
   argv1?: string;
   tag?: string;
   channel?: UpdateChannel;
+  scope?: "full" | "core";
   timeoutMs?: number;
   runCommand?: CommandRunner;
   progress?: UpdateStepProgress;
@@ -93,7 +94,7 @@ const MAX_LOG_CHARS = 8000;
 const PREFLIGHT_MAX_COMMITS = 10;
 const START_DIRS = ["cwd", "argv1", "process"];
 const DEFAULT_PACKAGE_NAME = "openclaw";
-const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME]);
+const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME, "pansclaw"]);
 
 function normalizeDir(value?: string | null) {
   if (!value) {
@@ -431,6 +432,7 @@ function mergeCommandEnvironments(
 
 export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<UpdateRunResult> {
   const startedAt = Date.now();
+  const scope = opts.scope ?? "full";
   const defaultCommandEnv = await createGlobalInstallEnv();
   const runCommand =
     opts.runCommand ??
@@ -496,6 +498,112 @@ export async function runGatewayUpdate(opts: UpdateRunnerOptions = {}): Promise<
     });
     const beforeSha = beforeShaResult.stdout.trim() || null;
     const beforeVersion = await readPackageVersion(gitRoot);
+
+    if (scope === "core") {
+      const manager = await resolveAvailableManager(runCommand, gitRoot, timeoutMs);
+      const coreTotalSteps = 3;
+      const runCoreStep = async (name: string, argv: string[], env?: NodeJS.ProcessEnv) =>
+        runStep({
+          runCommand,
+          name,
+          argv,
+          cwd: gitRoot,
+          timeoutMs,
+          env,
+          progress,
+          stepIndex: steps.length,
+          totalSteps: coreTotalSteps,
+        });
+
+      const depsStep = await runCoreStep(
+        "deps install (core)",
+        managerInstallArgs(manager.manager, {
+          compatFallback: manager.fallback && manager.manager === "npm",
+        }),
+      );
+      steps.push(depsStep);
+      if (depsStep.exitCode !== 0) {
+        return {
+          status: "error",
+          mode: "git",
+          root: gitRoot,
+          reason: "deps-install-failed",
+          before: { sha: beforeSha, version: beforeVersion },
+          steps,
+          durationMs: Date.now() - startedAt,
+        };
+      }
+
+      const buildStep = await runCoreStep(
+        "build (core)",
+        managerScriptArgs(manager.manager, "build"),
+      );
+      steps.push(buildStep);
+      if (buildStep.exitCode !== 0) {
+        return {
+          status: "error",
+          mode: "git",
+          root: gitRoot,
+          reason: "build-failed",
+          before: { sha: beforeSha, version: beforeVersion },
+          steps,
+          durationMs: Date.now() - startedAt,
+        };
+      }
+
+      const doctorEntry = path.join(gitRoot, "openclaw.mjs");
+      const doctorEntryExists = await fs
+        .stat(doctorEntry)
+        .then(() => true)
+        .catch(() => false);
+      if (!doctorEntryExists) {
+        steps.push({
+          name: "openclaw doctor entry (core)",
+          command: `verify ${doctorEntry}`,
+          cwd: gitRoot,
+          durationMs: 0,
+          exitCode: 1,
+          stderrTail: `missing ${doctorEntry}`,
+        });
+        return {
+          status: "error",
+          mode: "git",
+          root: gitRoot,
+          reason: "doctor-entry-missing",
+          before: { sha: beforeSha, version: beforeVersion },
+          steps,
+          durationMs: Date.now() - startedAt,
+        };
+      }
+
+      const doctorNodePath = await resolveStableNodePath(process.execPath);
+      const doctorArgv = [doctorNodePath, doctorEntry, "doctor", "--non-interactive", "--fix"];
+      const doctorStep = await runCoreStep("openclaw doctor (core)", doctorArgv, {
+        OPENCLAW_UPDATE_IN_PROGRESS: "1",
+      });
+      steps.push(doctorStep);
+
+      const afterShaResult = await runCommand(["git", "-C", gitRoot, "rev-parse", "HEAD"], {
+        cwd: gitRoot,
+        timeoutMs,
+      });
+      const afterVersion = await readPackageVersion(gitRoot);
+      const failedStep = steps.find((step) => step.exitCode !== 0);
+      return {
+        status: failedStep ? "error" : "ok",
+        mode: "git",
+        root: gitRoot,
+        reason: failedStep ? failedStep.name : undefined,
+        before: { sha: beforeSha, version: beforeVersion },
+        after: {
+          sha: afterShaResult.stdout.trim() || null,
+          version: afterVersion,
+        },
+        steps,
+        durationMs: Date.now() - startedAt,
+      };
+    }
+
     const channel: UpdateChannel = opts.channel ?? "dev";
     const branch = channel === "dev" ? await readBranchName(runCommand, gitRoot, timeoutMs) : null;
     const needsCheckoutMain = channel === "dev" && branch !== DEV_BRANCH;
