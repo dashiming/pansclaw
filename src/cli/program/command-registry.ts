@@ -124,6 +124,11 @@ const coreEntries: CoreCliEntry[] = [
         hasSubcommands: false,
       },
       {
+        name: "startup",
+        description: "Start gateway: kill old processes, start fresh, verify ready",
+        hasSubcommands: false,
+      },
+      {
         name: "uninstall",
         description: "Uninstall the gateway service + local data (CLI remains)",
         hasSubcommands: false,

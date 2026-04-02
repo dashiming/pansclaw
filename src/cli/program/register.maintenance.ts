@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { dashboardCommand } from "../../commands/dashboard.js";
 import { doctorCommand } from "../../commands/doctor.js";
 import { resetCommand } from "../../commands/reset.js";
+import { startupCommand } from "../../commands/startup.js";
 import { uninstallCommand } from "../../commands/uninstall.js";
 import { defaultRuntime } from "../../runtime.js";
 import { formatDocsLink } from "../../terminal/links.js";
@@ -107,6 +108,29 @@ export function registerMaintenanceCommands(program: Command) {
           yes: Boolean(opts.yes),
           nonInteractive: Boolean(opts.nonInteractive),
           dryRun: Boolean(opts.dryRun),
+        });
+      });
+    });
+
+  program
+    .command("startup")
+    .description("Start gateway: kill old processes, start fresh, verify ready")
+    .addHelpText(
+      "after",
+      () =>
+        `\n${theme.muted("Examples:")}\n  pansclaw startup\n  pansclaw startup --port 19000 --verbose\n`,
+    )
+    .option("--port <number>", "Gateway port (default: 18890)", "18890")
+    .option("--bind <host>", "Bind address (default: loopback)", "loopback")
+    .option("--verbose", "Enable verbose logging", false)
+    .option("--check-only", "Check gateway status without starting", false)
+    .action(async (opts) => {
+      await runCommandWithRuntime(defaultRuntime, async () => {
+        await startupCommand(defaultRuntime, {
+          port: Number(opts.port),
+          bind: opts.bind,
+          verbose: Boolean(opts.verbose),
+          checkOnly: Boolean(opts.checkOnly),
         });
       });
     });
