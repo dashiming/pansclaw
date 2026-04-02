@@ -107,6 +107,18 @@ export type ChatModelOption = {
   displayName: string;
 };
 
+function toCanonicalOptionValue(id: string, provider: string): string {
+  const trimmedId = id.trim();
+  if (!trimmedId) {
+    return "";
+  }
+  if (trimmedId.includes("/")) {
+    return trimmedId;
+  }
+  const trimmedProvider = provider.trim();
+  return trimmedProvider ? `${trimmedProvider}/${trimmedId}` : trimmedId;
+}
+
 export function buildChatModelOptions(
   catalog: ModelCatalogEntry[],
   currentOverride: string,
@@ -115,18 +127,18 @@ export function buildChatModelOptions(
   const seen = new Set<string>();
   const options: ChatModelOption[] = [];
   const addOption = (id: string, displayName: string, provider: string) => {
-    const trimmed = id.trim();
-    if (!trimmed) {
+    const canonicalValue = toCanonicalOptionValue(id, provider);
+    if (!canonicalValue) {
       return;
     }
-    const key = trimmed.toLowerCase();
+    const key = canonicalValue.toLowerCase();
     if (seen.has(key)) {
       return;
     }
     seen.add(key);
     const providerLabel = PROVIDER_DISPLAY_LABELS[provider] || provider;
     options.push({
-      value: trimmed,
+      value: canonicalValue,
       label: `${displayName} · ${providerLabel}`,
       provider,
       displayName,
