@@ -1,0 +1,46 @@
+name: Startup Core Guard
+
+on:
+  push:
+    paths:
+      - "src/commands/startup.ts"
+      - "src/cli/program/register.maintenance.ts"
+      - "src/cli/program/command-registry.ts"
+      - "scripts/pansclaw-startup-check.sh"
+      - "skills/startup-core-guard/**"
+      - "package.json"
+      - ".github/workflows/startup-core-guard.yml"
+  pull_request:
+    paths:
+      - "src/commands/startup.ts"
+      - "src/cli/program/register.maintenance.ts"
+      - "src/cli/program/command-registry.ts"
+      - "scripts/pansclaw-startup-check.sh"
+      - "skills/startup-core-guard/**"
+      - "package.json"
+      - ".github/workflows/startup-core-guard.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: startup-core-guard-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  startup-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+          use-sticky-disk: "false"
+
+      - name: Run startup guard check
+        env:
+          OPENCLAW_STATE_DIR: /tmp/openclaw-help-check
+        run: pnpm startup:check

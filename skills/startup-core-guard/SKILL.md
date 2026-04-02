@@ -1,3 +1,8 @@
+---
+name: startup-core-guard
+description: Validate and guard OpenClaw/PansClaw startup command availability. Use when users ask to check startup is built-in, run startup --check-only, verify startup after upgrade/sync, or prevent startup regressions.
+---
+
 # Startup Core Guard Skill
 
 技能名称：`startup-core-guard`
